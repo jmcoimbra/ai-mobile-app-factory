@@ -36,6 +36,7 @@ export const PASSING_CHECKS: CheckResult = {
 export interface Calls {
   implement: ImplementContext[];
   openPullRequest: number;
+  pushUpdate: number;
   dispatchRelease: ReleaseRequest[];
   findReleaseRun: ReleaseRequest[];
 }
@@ -45,8 +46,9 @@ export interface FakeOptions {
   checks?: CheckResult | ((attempt: number) => CheckResult);
   review?: ReviewResult | ((attempt: number) => ReviewResult);
   diff?: Diff;
-  ciOk?: boolean;
+  ciOk?: boolean | ((attempt: number) => boolean);
   merged?: boolean;
+  tagOnMain?: boolean;
   existingRun?: ReleaseRun | null;
 }
 
@@ -54,6 +56,7 @@ export function fakeDeps(options: FakeOptions = {}): { deps: FactoryDeps; calls:
   const calls: Calls = {
     implement: [],
     openPullRequest: 0,
+    pushUpdate: 0,
     dispatchRelease: [],
     findReleaseRun: [],
   };
@@ -89,14 +92,20 @@ export function fakeDeps(options: FakeOptions = {}): { deps: FactoryDeps; calls:
       const checks = options.checks ?? PASSING_CHECKS;
       return typeof checks === 'function' ? checks(attempt) : checks;
     },
+    async tagOnDefaultBranch() {
+      return options.tagOnMain ?? true;
+    },
     async openPullRequest(): Promise<PullRequest> {
       calls.openPullRequest += 1;
       return { url: 'https://github.com/example/repo/pull/7', number: 7 };
     },
+    async pushUpdate() {
+      calls.pushUpdate += 1;
+    },
     async awaitChecks() {
-      return options.ciOk === false
-        ? { ok: false, failures: ['e2e-android'] }
-        : { ok: true, failures: [] };
+      const ok =
+        typeof options.ciOk === 'function' ? options.ciOk(attempt) : (options.ciOk ?? true);
+      return ok ? { ok: true, failures: [] } : { ok: false, failures: ['e2e-android (fail)'] };
     },
     async isMerged() {
       return options.merged ?? false;

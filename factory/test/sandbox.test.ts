@@ -6,7 +6,7 @@ import { describe, test } from 'node:test';
 
 import { createCommandRunner, CommandError } from '../src/adapters/command-runner.ts';
 import { Sandbox, SandboxError } from '../src/adapters/sandbox.ts';
-import { childEnvironment, isProtectedPath } from '../src/policy.ts';
+import { childEnvironment, isProtectedPath, scratchHome } from '../src/policy.ts';
 
 async function workspace(): Promise<{ root: string; outside: string }> {
   const base = await mkdtemp(join(tmpdir(), 'factory-'));
@@ -111,6 +111,20 @@ describe('command runner', () => {
       EXPO_TOKEN: 'secret',
       SENTRY_AUTH_TOKEN: 'secret',
     });
-    assert.deepEqual(Object.keys(env).sort(), ['CI', 'HOME', 'NODE_ENV', 'PATH']);
+    assert.deepEqual(Object.keys(env).sort(), [
+      'CI',
+      'HOME',
+      'NODE_ENV',
+      'PATH',
+      'npm_config_update_notifier',
+    ]);
+  });
+
+  test('code run from the workspace gets a scratch HOME, never the real one', async () => {
+    const { root } = await workspace();
+    const env = childEnvironment({ PATH: '/usr/bin', HOME: '/home/x' }, scratchHome(root));
+    assert.equal(env.HOME, join(root, '.factory-home'));
+    assert.ok(isProtectedPath('.factory-home/.npmrc'));
+    assert.ok(isProtectedPath('.factory/test-results.json'));
   });
 });

@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { childEnvironment } from '../policy.ts';
+import { childEnvironment, scratchHome } from '../policy.ts';
 import type { Diff, Workspace } from '../ports.ts';
 import type { FeatureSpec } from '../spec.ts';
 
@@ -35,8 +35,31 @@ export function createGitWorkspaces(repoRoot: string, baseBranch = 'main') {
       await mkdir(workspacesRoot, { recursive: true });
       await git(root, 'fetch', 'origin', baseBranch);
       await git(root, 'worktree', 'add', '--no-track', '-b', branch, path, `origin/${baseBranch}`);
-      await run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: path, env: childEnvironment() });
+      // Install scripts run here, so they get the scratch HOME too.
+      await mkdir(scratchHome(path), { recursive: true });
+      await run('npm', ['ci', '--no-audit', '--no-fund', '--ignore-scripts'], {
+        cwd: path,
+        env: childEnvironment(process.env, scratchHome(path)),
+      });
       return { path, branch };
+    },
+
+    /** Whether the tag exists and sits on the default branch. */
+    async tagOnDefaultBranch(tag: string): Promise<boolean> {
+      try {
+        await git(
+          root,
+          'fetch',
+          '--quiet',
+          'origin',
+          baseBranch,
+          `refs/tags/${tag}:refs/tags/${tag}`,
+        );
+        await git(root, 'merge-base', '--is-ancestor', `refs/tags/${tag}`, `origin/${baseBranch}`);
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     /** Everything that differs from the base, tracked or not. */
@@ -49,9 +72,11 @@ export function createGitWorkspaces(repoRoot: string, baseBranch = 'main') {
       return { files, patch };
     },
 
+    /** Commits whatever changed and pushes the branch. Nothing to commit is fine. */
     async commitAndPush(workspace: Workspace, message: string): Promise<void> {
       await git(workspace.path, 'add', '--all');
-      await git(workspace.path, 'commit', '--quiet', '-m', message);
+      const staged = await git(workspace.path, 'diff', '--cached', '--name-only');
+      if (staged.length > 0) await git(workspace.path, 'commit', '--quiet', '-m', message);
       await git(workspace.path, 'push', '--quiet', '-u', 'origin', workspace.branch);
     },
 

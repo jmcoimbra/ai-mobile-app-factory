@@ -34,6 +34,13 @@ export function createDeps(options: DepsOptions): FactoryDeps {
         cwd: workspace.path,
       });
     },
+    async pushUpdate({ spec, workspace }: { spec: FeatureSpec; workspace: Workspace }) {
+      await workspaces.commitAndPush(
+        workspace,
+        `fix: address checks for ${spec.title.toLowerCase()}`,
+      );
+    },
+    tagOnDefaultBranch: workspaces.tagOnDefaultBranch,
     awaitChecks: github.awaitChecks,
     isMerged: github.isMerged,
     findReleaseRun: github.findReleaseRun,

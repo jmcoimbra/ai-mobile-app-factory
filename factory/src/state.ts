@@ -60,8 +60,11 @@ export const FactoryState = Annotation.Root({
   // Release run.
   version: lastValue<AppVersion>(),
   submissionApproval: lastValue<ApprovalAnswer>(),
+  /** Whether the submission a person approved was a dry run. Fixed at approval time. */
+  submissionDryRun: lastValue<boolean>(),
   submission: lastValue<ReleaseRun>(),
   promotionApproval: lastValue<ApprovalAnswer>(),
+  promotionDryRun: lastValue<boolean>(),
   promotion: lastValue<ReleaseRun>(),
 
   // Both.

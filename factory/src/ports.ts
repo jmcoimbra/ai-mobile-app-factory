@@ -82,7 +82,12 @@ export interface FactoryDeps {
   diff(workspace: Workspace): Promise<Diff>;
   runChecks(workspace: Workspace, scripts: readonly AllowedScript[]): Promise<CheckResult>;
 
+  /** Whether the tag exists and is reachable from the default branch. */
+  tagOnDefaultBranch(tag: string): Promise<boolean>;
+
   openPullRequest(input: { spec: FeatureSpec; workspace: Workspace }): Promise<PullRequest>;
+  /** Pushes the workspace's new commits to the branch of an open pull request. */
+  pushUpdate(input: { spec: FeatureSpec; workspace: Workspace }): Promise<void>;
   /** Waits for the checks of the pull request to finish. */
   awaitChecks(pullRequest: PullRequest): Promise<{ ok: boolean; failures: string[] }>;
   isMerged(pullRequest: PullRequest): Promise<boolean>;

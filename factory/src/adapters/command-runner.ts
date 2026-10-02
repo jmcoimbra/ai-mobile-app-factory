@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 
-import { childEnvironment, isAllowedScript, type AllowedScript } from '../policy.ts';
+import { childEnvironment, isAllowedScript, scratchHome, type AllowedScript } from '../policy.ts';
 
 export class CommandError extends Error {
   constructor(message: string) {
@@ -23,6 +24,9 @@ const MAX_OUTPUT = 64 * 1024;
  * a minimal environment with no secret in it.
  */
 export function createCommandRunner(cwd: string, timeoutMs = 15 * 60 * 1000) {
+  const home = scratchHome(cwd);
+  mkdirSync(home, { recursive: true });
+  const env = childEnvironment(process.env, home);
   return {
     async run(script: string, args: readonly string[] = []): Promise<CommandResult> {
       if (!isAllowedScript(script)) {
@@ -37,7 +41,7 @@ export function createCommandRunner(cwd: string, timeoutMs = 15 * 60 * 1000) {
         execFile(
           'npm',
           ['run', script as AllowedScript, '--', ...args],
-          { cwd, env: childEnvironment(), timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
+          { cwd, env, timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 },
           (error, stdout, stderr) => {
             const output = `${stdout}\n${stderr}`.slice(-MAX_OUTPUT);
             const exitCode =

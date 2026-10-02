@@ -35,6 +35,8 @@ const PROTECTED_PATTERNS: readonly RegExp[] = [
   /^AGENTS\.md$/,
   /^CLAUDE\.md$/,
   /(^|\/)\.git(\/|$)/,
+  /^\.factory(\/|$)/,
+  /^\.factory-home(\/|$)/,
 ];
 
 export function isProtectedPath(relativePath: string): boolean {
@@ -43,7 +45,7 @@ export function isProtectedPath(relativePath: string): boolean {
 }
 
 /** The npm scripts the agent and the verify node may run. Nothing else executes. */
-export const ALLOWED_SCRIPTS = ['lint', 'format', 'typecheck', 'test'] as const;
+export const ALLOWED_SCRIPTS = ['lint', 'format', 'typecheck', 'test', 'test:report'] as const;
 export type AllowedScript = (typeof ALLOWED_SCRIPTS)[number];
 
 export function isAllowedScript(value: string): value is AllowedScript {
@@ -53,12 +55,26 @@ export function isAllowedScript(value: string): value is AllowedScript {
 /**
  * The environment a child process gets. Nothing else is passed on, so a
  * token in the operator's shell never reaches code the agent wrote.
+ *
+ * `home` is the HOME the child sees. Anything that executes code from the
+ * workspace (test runners, linters, install scripts) gets a scratch
+ * directory, because the real home holds SSH keys, npm tokens and shell
+ * history. The factory's own git and gh calls keep the real one.
  */
-export function childEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const passthrough = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'USER', 'SHELL'];
-  const env: NodeJS.ProcessEnv = { CI: '1', NODE_ENV: 'test' };
+export function childEnvironment(
+  source: NodeJS.ProcessEnv = process.env,
+  home: string | undefined = source.HOME,
+): NodeJS.ProcessEnv {
+  const passthrough = ['PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'SHELL'];
+  const env: NodeJS.ProcessEnv = { CI: '1', NODE_ENV: 'test', npm_config_update_notifier: 'false' };
   for (const name of passthrough) {
     if (source[name] !== undefined) env[name] = source[name];
   }
+  if (home !== undefined) env.HOME = home;
   return env;
+}
+
+/** The scratch HOME of a workspace. Created on demand by the command runner. */
+export function scratchHome(workspacePath: string): string {
+  return `${workspacePath}/.factory-home`;
 }

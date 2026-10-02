@@ -89,9 +89,10 @@ export function createGitHub(options: GitHubOptions) {
         const checks = JSON.parse(json) as { name: string; state: string; bucket: string }[];
         const pending = checks.filter((check) => check.bucket === 'pending');
         if (checks.length > 0 && pending.length === 0) {
+          // Only a pass counts. A cancelled or skipped check is not green.
           const failures = checks
-            .filter((check) => check.bucket === 'fail')
-            .map((check) => check.name);
+            .filter((check) => check.bucket !== 'pass')
+            .map((check) => `${check.name} (${check.bucket})`);
           return { ok: failures.length === 0, failures };
         }
         if (Date.now() - started > maxWaitMs) {

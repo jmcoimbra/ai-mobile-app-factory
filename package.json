@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test:tooling && npm run test --workspaces --if-present",
-    "test:tooling": "node --test \"tooling/**/*.test.mjs\""
+    "test:tooling": "node --test \"tooling/**/*.test.mjs\"",
+    "test:report": "node tooling/test-report.mjs"
   },
   "overrides": {
     "react": "19.2.3",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "prettier": "^3.9.9",
-    "yaml": "^2.8.0"
+    "yaml": "^2.8.0",
+    "glob": "^11.0.0"
   }
 }

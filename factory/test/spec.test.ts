@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { passedTestNames } from '../src/adapters/checks.ts';
+import { parseTestReport } from '../src/adapters/checks.ts';
 import { parseReview } from '../src/adapters/models.ts';
 import { SpecError, parseSpec } from '../src/spec.ts';
 import { SPEC_MARKDOWN } from './fakes.ts';
@@ -42,24 +42,29 @@ describe('spec parsing', () => {
   });
 });
 
-describe('reading test output', () => {
-  test('collects passing names from jest and node:test output and drops failures', () => {
-    const output = [
-      '\u001b[32m✓\u001b[39m \u001b[2mhome screen renders the app title (30 ms)\u001b[22m',
-      '  ✓ toggling a task persists and survives a reload (2 ms)',
-      '  ✕ broken test (1 ms)',
-      '  ✔ every text and surface pair meets WCAG AA contrast in light and dark (0.4ms)',
-      '✔ contrast (1.6ms)',
-      '  ✖ flaky one (3.2ms)',
-      '  ✓ flaky one (1 ms)',
-      'Tests: 3 passed, 3 total',
-    ].join('\n');
-    assert.deepEqual(passedTestNames(output), [
-      'home screen renders the app title',
-      'toggling a task persists and survives a reload',
-      'every text and surface pair meets WCAG AA contrast in light and dark',
-      'contrast',
-    ]);
+describe('reading the test report', () => {
+  test('reads passing names from the structured report and fails closed otherwise', () => {
+    const report = parseTestReport(
+      JSON.stringify({
+        ok: true,
+        passed: ['home screen renders the app title', 'contrast'],
+        failed: [],
+      }),
+    );
+    assert.equal(report.ok, true);
+    assert.deepEqual(report.passed, ['home screen renders the app title', 'contrast']);
+
+    const failing = parseTestReport(JSON.stringify({ ok: false, passed: ['a'], failed: ['b'] }));
+    assert.equal(failing.ok, false);
+    assert.deepEqual(failing.failed, ['b']);
+
+    // A report that claims ok with failures, no report, or garbage: not ok.
+    assert.equal(
+      parseTestReport(JSON.stringify({ ok: true, passed: [], failed: ['x'] })).ok,
+      false,
+    );
+    assert.equal(parseTestReport(undefined).ok, false);
+    assert.equal(parseTestReport('✓ home screen renders the app title').ok, false);
   });
 });
 

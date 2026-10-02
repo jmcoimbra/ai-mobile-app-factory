@@ -193,7 +193,22 @@ describe('feature run', () => {
 
     assert.equal(interruptKind(result), 'escalate');
     assert.equal(calls.openPullRequest, 1, 'the same pull request is updated, never a second one');
+    assert.equal(calls.pushUpdate, 2, 'each later attempt is pushed to that pull request');
     assert.equal(calls.implement.length, 3);
+  });
+
+  test('a fix after a red CI is pushed and the merge is asked for', async () => {
+    const { graph, calls } = start({ ciOk: (attempt) => attempt >= 2 });
+    await graph.invoke({ request: feature });
+    const result = await graph.invoke(approve());
+
+    assert.equal(interruptKind(result), 'approve_merge');
+    assert.equal(calls.openPullRequest, 1);
+    assert.equal(calls.pushUpdate, 1);
+    assert.ok(
+      calls.implement[1]?.feedback[0]?.startsWith('ci: '),
+      'the agent sees which check failed',
+    );
   });
 });
 
@@ -205,6 +220,31 @@ describe('release run', () => {
     assert.equal(result.outcome, 'failed');
     assert.equal(result.__interrupt__, undefined);
     assert.equal(calls.dispatchRelease.length, 0);
+  });
+
+  test('a tag that is not on the default branch ends the run', async () => {
+    const { graph, calls } = start({ tagOnMain: false }, true);
+    const result = await graph.invoke({ request: release });
+
+    assert.equal(result.outcome, 'failed');
+    assert.match(result.error ?? '', /not on the default branch/);
+    assert.equal(calls.dispatchRelease.length, 0);
+  });
+
+  test('a dry run approved stays a dry run when the flag changes before the resume', async () => {
+    // The approval is asked while the operator flag says dry run...
+    const { deps, calls } = fakeDeps();
+    const options = { allowStoreSubmit: false };
+    const compiled = buildFactoryGraph(deps, options, new MemorySaver());
+    const config = { configurable: { thread_id: 'flag-flip' } };
+    await compiled.invoke({ request: release }, config);
+
+    // ...and the flag is flipped before the person's answer arrives.
+    options.allowStoreSubmit = true;
+    const result = (await compiled.invoke(approve() as never, config)) as Result;
+
+    assert.equal(calls.dispatchRelease[0]?.dryRun, true);
+    assert.equal(result.submission?.dryRun, true);
   });
 
   test('never reaches submit without an approved submission', async () => {

@@ -48,7 +48,6 @@
     "preset": "jest-expo",
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1"
-    },
-    "verbose": true
+    }
   }
 }

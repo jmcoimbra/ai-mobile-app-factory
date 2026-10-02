@@ -5,22 +5,35 @@ import type { AllowedScript } from '../policy.ts';
 import type { CheckResult, Workspace } from '../ports.ts';
 import { createCommandRunner } from './command-runner.ts';
 
-// Jest (verbose) prints "✓ name (3 ms)"; node:test prints "✔ name (0.5ms)".
-const PASSED_LINE = /^\s*[✓✔]\s+(.+?)(?:\s+\(\d+(?:\.\d+)?\s?ms\))?\s*$/;
-const FAILED_LINE = /^\s*[✕✖]\s+(.+?)(?:\s+\(\d+(?:\.\d+)?\s?ms\))?\s*$/;
+/** What tooling/test-report.mjs writes. */
+export interface TestReport {
+  ok: boolean;
+  passed: string[];
+  failed: string[];
+}
 
-export function passedTestNames(output: string): string[] {
-  const passed = new Set<string>();
-  const failed = new Set<string>();
-  for (const rawLine of output.split('\n')) {
-    // Strip ANSI colour codes before matching.
-    const line = rawLine.replace(/\u001b\[[0-9;]*m/g, '');
-    const pass = PASSED_LINE.exec(line);
-    if (pass?.[1]) passed.add(pass[1]);
-    const fail = FAILED_LINE.exec(line);
-    if (fail?.[1]) failed.add(fail[1]);
+export const TEST_REPORT_PATH = '.factory/test-results.json';
+
+/**
+ * Read the structured report the test runners produced. Names come from
+ * the runners' own reporters, never from console output, so a test that
+ * prints a check mark proves nothing. A missing or unreadable report is a
+ * failure, never an empty success.
+ */
+export function parseTestReport(text: string | undefined): TestReport {
+  if (text === undefined) return { ok: false, passed: [], failed: ['no test report was written'] };
+  try {
+    const parsed = JSON.parse(text) as Partial<TestReport>;
+    const passed = Array.isArray(parsed.passed)
+      ? parsed.passed.filter((n) => typeof n === 'string')
+      : [];
+    const failed = Array.isArray(parsed.failed)
+      ? parsed.failed.filter((n) => typeof n === 'string')
+      : [];
+    return { ok: parsed.ok === true && failed.length === 0, passed, failed };
+  } catch {
+    return { ok: false, passed: [], failed: ['the test report could not be read'] };
   }
-  return [...passed].filter((name) => !failed.has(name));
 }
 
 /** The `name:` of every Maestro flow under apps/<app>/e2e. */
@@ -51,8 +64,8 @@ export async function maestroFlowNames(root: string): Promise<string[]> {
 }
 
 /**
- * Runs the allowed check scripts in a workspace and reads the names of the
- * tests that passed out of their output.
+ * Runs the allowed check scripts in a workspace. `test:report` writes the
+ * structured report this reads the passing test names from.
  */
 export async function runChecks(
   workspace: Workspace,
@@ -60,20 +73,27 @@ export async function runChecks(
 ): Promise<CheckResult> {
   const runner = createCommandRunner(workspace.path);
   const failures: string[] = [];
-  let testOutput = '';
 
   for (const script of scripts) {
     const result = await runner.run(script);
-    if (script === 'test') testOutput = result.output;
     if (!result.ok) {
       failures.push(`${script} failed (exit ${result.exitCode}):\n${result.output.slice(-4000)}`);
     }
   }
 
+  let reportText: string | undefined;
+  try {
+    reportText = await readFile(resolve(workspace.path, TEST_REPORT_PATH), 'utf8');
+  } catch {
+    reportText = undefined;
+  }
+  const report = parseTestReport(reportText);
+  failures.push(...report.failed.map((name) => `test failed: ${name}`));
+
   return {
-    ok: failures.length === 0,
+    ok: failures.length === 0 && report.ok,
     failures,
-    passedTests: passedTestNames(testOutput),
+    passedTests: report.passed,
     e2eFlows: await maestroFlowNames(workspace.path),
   };
 }

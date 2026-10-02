@@ -1,7 +1,7 @@
 import { deriveVersion } from '@maf/app-version';
 import { END, START, StateGraph, interrupt, type BaseCheckpointSaver } from '@langchain/langgraph';
 
-import { ALLOWED_SCRIPTS, MAX_ATTEMPTS, isProtectedPath } from './policy.ts';
+import { MAX_ATTEMPTS, isProtectedPath, type AllowedScript } from './policy.ts';
 import type { FactoryDeps, FactoryOptions, ReleaseRequest } from './ports.ts';
 import { isE2eCriterion } from './spec.ts';
 import { Approval, EscalationDecision, FactoryState, type State, type Update } from './state.ts';
@@ -14,7 +14,7 @@ export class ApprovalGuardError extends Error {
   }
 }
 
-const CHECK_SCRIPTS = ALLOWED_SCRIPTS.filter((script) => script !== 'format');
+const CHECK_SCRIPTS: readonly AllowedScript[] = ['lint', 'typecheck', 'test:report'];
 
 function describe(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
@@ -152,12 +152,14 @@ export function buildFactoryGraph(
   }
 
   async function openPullRequestNode(state: State): Promise<Update> {
-    // Resuming after a crash must not open a second pull request.
-    if (state.pullRequest) return { log: ['pull request already open'] };
-    const pullRequest = await deps.openPullRequest({
-      spec: state.spec!,
-      workspace: state.workspace!,
-    });
+    const input = { spec: state.spec!, workspace: state.workspace! };
+    // A second pass after a red CI pushes the fix to the same pull request.
+    // A resume after a crash lands here too, with nothing new to push.
+    if (state.pullRequest) {
+      await deps.pushUpdate(input);
+      return { log: [`pull request updated: ${state.pullRequest.url}`] };
+    }
+    const pullRequest = await deps.openPullRequest(input);
     return { pullRequest, log: [`pull request opened: ${pullRequest.url}`] };
   }
 
@@ -187,11 +189,22 @@ export function buildFactoryGraph(
 
   // ---- Release run -------------------------------------------------------
 
-  function loadReleaseNode(state: State): Update {
+  async function loadReleaseNode(state: State): Promise<Update> {
     if (state.request.kind !== 'release') return {};
+    const { tag } = state.request;
     try {
-      const version = deriveVersion(state.request.tag);
-      return { version, log: [`release ${state.request.tag} is version ${version.version}`] };
+      const version = deriveVersion(tag);
+      // A release builds only from a tag on the default branch (spec 0001).
+      if (!(await deps.tagOnDefaultBranch(tag))) {
+        throw new Error(`tag ${tag} is not on the default branch, or does not exist`);
+      }
+      // Frozen here, before anyone is asked: an approval node restarts from
+      // its first line on resume, so it must read the flag from state.
+      return {
+        version,
+        submissionDryRun: flagDryRun(),
+        log: [`release ${tag} is version ${version.version}`],
+      };
     } catch (error) {
       return {
         error: describe(error),
@@ -201,19 +214,26 @@ export function buildFactoryGraph(
     }
   }
 
-  function releaseRequest(state: State, action: ReleaseRequest['action']): ReleaseRequest {
+  /**
+   * The request a person is shown, and later the one that is dispatched.
+   * `dryRun` comes from the state, where the node before the approval froze
+   * it, so a flag changed between the approval and the resume cannot turn
+   * an approved dry run into an upload.
+   */
+  function releaseRequest(
+    state: State,
+    action: ReleaseRequest['action'],
+    dryRun: boolean,
+  ): ReleaseRequest {
     if (state.request.kind !== 'release') throw new Error('not a release run');
-    return {
-      tag: state.request.tag,
-      target: state.request.target,
-      action,
-      dryRun: !options.allowStoreSubmit,
-    };
+    return { tag: state.request.tag, target: state.request.target, action, dryRun };
   }
+  const flagDryRun = () => !options.allowStoreSubmit;
 
   // Interrupt 4. One approval per store and flavor.
   function approveSubmissionNode(state: State): Update {
-    const request = releaseRequest(state, 'submit');
+    if (state.submissionDryRun === undefined) throw new ApprovalGuardError('approve_submission');
+    const request = releaseRequest(state, 'submit', state.submissionDryRun);
     const answer = interrupt(
       {
         kind: 'approve_submission',
@@ -238,13 +258,17 @@ export function buildFactoryGraph(
     // The edge already routes rejections away. This guard is for a state
     // that reached the node some other way.
     if (state.submissionApproval?.approved !== true) throw new ApprovalGuardError('submit');
-    const request = releaseRequest(state, 'submit');
+    if (state.submissionDryRun === undefined) throw new ApprovalGuardError('submit');
+    const request = releaseRequest(state, 'submit', state.submissionDryRun);
 
     // If the process died after dispatching, the run is already there.
     const existing = await deps.findReleaseRun(request);
     const submission = existing ?? (await deps.dispatchRelease(request));
     return {
       submission,
+      // A promotion is a dry run when the flag says so now or when the
+      // submission it promotes was one. Frozen before the next approval.
+      promotionDryRun: flagDryRun() || request.dryRun,
       log: [
         `${existing ? 'found' : 'dispatched'} ${submission.dryRun ? 'dry-run ' : ''}submission: ${submission.url}`,
       ],
@@ -253,7 +277,8 @@ export function buildFactoryGraph(
 
   // Interrupt 5. From the test track to production or to the organization.
   function approvePromotionNode(state: State): Update {
-    const request = releaseRequest(state, 'promote');
+    if (state.promotionDryRun === undefined) throw new ApprovalGuardError('approve_promotion');
+    const request = releaseRequest(state, 'promote', state.promotionDryRun);
     const answer = interrupt(
       {
         kind: 'approve_promotion',
@@ -278,7 +303,8 @@ export function buildFactoryGraph(
   async function promoteNode(state: State): Promise<Update> {
     if (state.promotionApproval?.approved !== true) throw new ApprovalGuardError('promote');
     if (state.submissionApproval?.approved !== true) throw new ApprovalGuardError('promote');
-    const request = releaseRequest(state, 'promote');
+    if (state.promotionDryRun === undefined) throw new ApprovalGuardError('promote');
+    const request = releaseRequest(state, 'promote', state.promotionDryRun);
 
     const existing = await deps.findReleaseRun(request);
     const promotion = existing ?? (await deps.dispatchRelease(request));
