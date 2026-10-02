@@ -55,25 +55,25 @@ tag and ends when the build is in the stores. The tag exists because a person
 merged the release pull request that release-please opened (ADR 0004), so the
 two runs are separated by that approval.
 
-| # | Node | Kind | What it does |
-|---|---|---|---|
-| 0 | `route_entry` | deterministic | Sends a feature spec to node 1 and a release tag to node 11. |
-| 1 | `load_spec` | deterministic | Parses the feature spec. Fails when a criterion has no test name. |
-| 2 | `plan` | model | Maps each criterion to files and tests. Writes nothing. |
-| 3 | `approve_plan` | **interrupt** | A human approves, edits or rejects the plan. |
-| 4 | `implement` | agent | Writes code and tests inside an isolated git worktree. |
-| 5 | `verify` | deterministic | Lint, types, unit and component tests. Checks that every criterion's test exists and passed, and that the diff touches no protected path. |
-| 6 | `review` | model | Reads the diff against the spec and the security rules. |
-| 7 | `escalate` | **interrupt** | Reached when `verify` or `review` fails three times. A human decides. |
-| 8 | `open_pull_request` | side effect | Commits to a branch the factory owns, pushes it and opens the pull request. CI runs E2E and the preview builds. |
-| 9 | `await_ci` | deterministic | Reads the checks. A failure returns to `implement`. |
-| 10 | `approve_merge` | **interrupt** | A human reviews and merges. The factory never merges. The feature run ends here. |
-| 11 | `load_release` | deterministic | Validates the release tag and derives the version numbers. |
-| 12 | `approve_submission` | **interrupt** | One approval per store and flavor, showing version, flavor, store and track. |
-| 13 | `submit` | side effect | Dispatches the release workflow for that store, flavor and track. The upload job waits for a reviewer in a protected GitHub environment. |
-| 14 | `approve_promotion` | **interrupt** | A human approves the move from the test track to production or to the organization. |
-| 15 | `promote` | side effect | Dispatches the promotion, behind the same protected environment. |
-| 16 | `report` | deterministic | Writes what happened and what was measured. Both kinds of run end here. |
+| #   | Node                 | Kind          | What it does                                                                                                                              |
+| --- | -------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | `route_entry`        | deterministic | Sends a feature spec to node 1 and a release tag to node 11.                                                                              |
+| 1   | `load_spec`          | deterministic | Parses the feature spec. Fails when a criterion has no test name.                                                                         |
+| 2   | `plan`               | model         | Maps each criterion to files and tests. Writes nothing.                                                                                   |
+| 3   | `approve_plan`       | **interrupt** | A human approves, edits or rejects the plan.                                                                                              |
+| 4   | `implement`          | agent         | Writes code and tests inside an isolated git worktree.                                                                                    |
+| 5   | `verify`             | deterministic | Lint, types, unit and component tests. Checks that every criterion's test exists and passed, and that the diff touches no protected path. |
+| 6   | `review`             | model         | Reads the diff against the spec and the security rules.                                                                                   |
+| 7   | `escalate`           | **interrupt** | Reached when `verify` or `review` fails three times. A human decides.                                                                     |
+| 8   | `open_pull_request`  | side effect   | Commits to a branch the factory owns, pushes it and opens the pull request. CI runs E2E and the preview builds.                           |
+| 9   | `await_ci`           | deterministic | Reads the checks. A failure returns to `implement`.                                                                                       |
+| 10  | `approve_merge`      | **interrupt** | A human reviews and merges. The factory never merges. The feature run ends here.                                                          |
+| 11  | `load_release`       | deterministic | Validates the release tag and derives the version numbers.                                                                                |
+| 12  | `approve_submission` | **interrupt** | One approval per store and flavor, showing version, flavor, store and track.                                                              |
+| 13  | `submit`             | side effect   | Dispatches the release workflow for that store, flavor and track. The upload job waits for a reviewer in a protected GitHub environment.  |
+| 14  | `approve_promotion`  | **interrupt** | A human approves the move from the test track to production or to the organization.                                                       |
+| 15  | `promote`            | side effect   | Dispatches the promotion, behind the same protected environment.                                                                          |
+| 16  | `report`             | deterministic | Writes what happened and what was measured. Both kinds of run end here.                                                                   |
 
 Rules the graph holds:
 

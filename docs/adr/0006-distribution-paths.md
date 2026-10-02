@@ -12,13 +12,13 @@ and limits.
 
 ### What the vendors offer
 
-| Path | Who the vendor says it is for | Cost | Store review | Device management | Main limit |
-|---|---|---|---|---|---|
-| Managed Google Play private app | "Private apps are intended to be built and used by an individual enterprise" | 25 USD once through the Play Console; no fee when published from an EMM console | A "streamlined verification process" | Distribution happens from the organization's EMM console | Up to 1000 organizations per app. Once private, the app can never become public |
-| Apple custom app, private distribution | "proprietary apps for internal use within your organization" | Apple Developer Program, 99 USD a year | Yes, under the same guidelines, typically 1 to 2 days | Device management for managed distribution, or redemption codes | The distribution method cannot change after approval |
-| Apple unlisted app | "part-time employees, franchisees, partners" and other limited audiences, and employee-owned devices that cannot be managed | Apple Developer Program | Yes | None needed | "available to anyone who has access to the link" |
-| Apple Developer Enterprise Program | Large organizations distributing in-house apps | 299 USD a year | None through the App Store | Device management or a website | 100 or more employees, a verification interview, profiles that expire every 12 months |
-| Firebase App Distribution | "trusted testers", for apps that "have not yet been publicly released" | No cost | None | None | 500 testers per project, releases removed after 150 days. On iOS, ad hoc builds install only on registered devices |
+| Path                                   | Who the vendor says it is for                                                                                               | Cost                                                                            | Store review                                          | Device management                                               | Main limit                                                                                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Managed Google Play private app        | "Private apps are intended to be built and used by an individual enterprise"                                                | 25 USD once through the Play Console; no fee when published from an EMM console | A "streamlined verification process"                  | Distribution happens from the organization's EMM console        | Up to 1000 organizations per app. Once private, the app can never become public                                    |
+| Apple custom app, private distribution | "proprietary apps for internal use within your organization"                                                                | Apple Developer Program, 99 USD a year                                          | Yes, under the same guidelines, typically 1 to 2 days | Device management for managed distribution, or redemption codes | The distribution method cannot change after approval                                                               |
+| Apple unlisted app                     | "part-time employees, franchisees, partners" and other limited audiences, and employee-owned devices that cannot be managed | Apple Developer Program                                                         | Yes                                                   | None needed                                                     | "available to anyone who has access to the link"                                                                   |
+| Apple Developer Enterprise Program     | Large organizations distributing in-house apps                                                                              | 299 USD a year                                                                  | None through the App Store                            | Device management or a website                                  | 100 or more employees, a verification interview, profiles that expire every 12 months                              |
+| Firebase App Distribution              | "trusted testers", for apps that "have not yet been publicly released"                                                      | No cost                                                                         | None                                                  | None                                                            | 500 testers per project, releases removed after 150 days. On iOS, ad hoc builds install only on registered devices |
 
 Apple renamed Apple Business Manager to Apple Business. Its pages now use the
 new name.
@@ -45,11 +45,11 @@ does not return the slot before the yearly reset.
 
 ## Decision
 
-| Flavor | Android | iOS |
-|---|---|---|
-| `public` | Google Play, production track | App Store, public distribution |
-| `corporate` | Managed Google Play private app, restricted to the organization | Custom app with private distribution through Apple Business |
-| Pre-release, both | Google Play internal testing (up to 100 testers) | TestFlight (100 internal, 10,000 external testers, builds valid 90 days) |
+| Flavor            | Android                                                         | iOS                                                                      |
+| ----------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `public`          | Google Play, production track                                   | App Store, public distribution                                           |
+| `corporate`       | Managed Google Play private app, restricted to the organization | Custom app with private distribution through Apple Business              |
+| Pre-release, both | Google Play internal testing (up to 100 testers)                | TestFlight (100 internal, 10,000 external testers, builds valid 90 days) |
 
 - The two flavors have different package names and bundle identifiers. This
   is forced by both stores: a Google Play app restricted to organizations
@@ -83,8 +83,7 @@ the enterprise program or registered devices.
   number. So does an organization account on Google Play.
 - A personal Google Play account created after November 13, 2023 must run a
   closed test with at least 12 testers for 14 days before production.
-- The first submission to each store is a manual, approved step. See spec
-  0001.
+- The first submission to each store is a manual, approved step. See spec 0001.
 
 ## Sources, read on 2026-10-02
 

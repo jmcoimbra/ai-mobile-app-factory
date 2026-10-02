@@ -17,11 +17,11 @@ crashes on iOS and Android are outside what the JavaScript SDK captures.
 
 Options read for crash reporting:
 
-| Client | License | Native crashes | Expo | Where the data can go |
-|---|---|---|---|---|
-| `@sentry/react-native` | MIT | Yes, on both platforms | Config plugin, documented by Expo | Any server speaking the Sentry protocol: Sentry (its server is under the Functional Source License) or GlitchTip (MIT) |
-| `@embrace-io/react-native` | Apache 2.0 | Yes, as an OpenTelemetry log | Config plugin; OTLP export needs manual native edits | Any OTLP over HTTP endpoint |
-| OpenTelemetry JS alone | Apache 2.0 | No | No statement | Any OTLP endpoint |
+| Client                     | License    | Native crashes               | Expo                                                 | Where the data can go                                                                                                  |
+| -------------------------- | ---------- | ---------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `@sentry/react-native`     | MIT        | Yes, on both platforms       | Config plugin, documented by Expo                    | Any server speaking the Sentry protocol: Sentry (its server is under the Functional Source License) or GlitchTip (MIT) |
+| `@embrace-io/react-native` | Apache 2.0 | Yes, as an OpenTelemetry log | Config plugin; OTLP export needs manual native edits | Any OTLP over HTTP endpoint                                                                                            |
+| OpenTelemetry JS alone     | Apache 2.0 | No                           | No statement                                         | Any OTLP endpoint                                                                                                      |
 
 ## Decision
 
