@@ -5,6 +5,7 @@
  *   factory feature <spec.md> [--backend langchain|claude-code] [--base main]
  *   factory release <tag> --store play|appstore --flavor public|corporate [--track internal]
  *   factory resume <thread> --approve|--reject|--retry|--abort [--by <name>] [--note <text>]
+ *   factory continue <thread>                    run again after a crash, no new answer
  *   factory status <thread>
  *
  * Runs are durable: every run is a thread in .factory/checkpoints.sqlite,
@@ -12,7 +13,7 @@
  * process, on another day.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -40,6 +41,27 @@ function repoSlug(): string {
       encoding: 'utf8',
     }).trim()
   );
+}
+
+interface ThreadOptions {
+  backend: 'langchain' | 'claude-code';
+  baseBranch: string;
+  model?: string;
+}
+
+/** The options a run started with, kept beside the checkpoints so a resume uses the same. */
+function threadOptionsPath(root: string, thread: string): string {
+  return resolve(root, '.factory', 'threads', `${thread}.json`);
+}
+
+function saveThreadOptions(root: string, thread: string, options: ThreadOptions): void {
+  mkdirSync(resolve(root, '.factory', 'threads'), { recursive: true });
+  writeFileSync(threadOptionsPath(root, thread), JSON.stringify(options, null, 2));
+}
+
+function loadThreadOptions(root: string, thread: string): ThreadOptions | undefined {
+  const path = threadOptionsPath(root, thread);
+  return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as ThreadOptions) : undefined;
 }
 
 function stamp(): string {
@@ -80,19 +102,24 @@ async function main(): Promise<void> {
     },
   });
   const [command, argument] = positionals;
-  if (!command) fail('usage: factory <feature|release|resume|status> ...');
+  if (!command) fail('usage: factory <feature|release|resume|continue|status> ...');
 
   const root = repoRoot();
   mkdirSync(resolve(root, '.factory'), { recursive: true });
   const checkpointer = SqliteSaver.fromConnString(resolve(root, '.factory', 'checkpoints.sqlite'));
+
+  // A resume reuses the options its thread started with; a start records them.
+  const saved =
+    argument && ['resume', 'continue', 'status'].includes(command)
+      ? loadThreadOptions(root, argument)
+      : undefined;
+  const options: ThreadOptions = {
+    backend: values.backend === 'claude-code' ? 'claude-code' : (saved?.backend ?? 'langchain'),
+    baseBranch: values.base ?? saved?.baseBranch ?? process.env.FACTORY_BASE_BRANCH ?? 'main',
+    model: values.model ?? saved?.model,
+  };
   const graph = buildFactoryGraph(
-    createDeps({
-      repoRoot: root,
-      repo: repoSlug(),
-      model: values.model,
-      backend: values.backend === 'claude-code' ? 'claude-code' : 'langchain',
-      baseBranch: values.base ?? process.env.FACTORY_BASE_BRANCH ?? 'main',
-    }),
+    createDeps({ repoRoot: root, repo: repoSlug(), ...options }),
     { allowStoreSubmit: process.env.FACTORY_ALLOW_STORE_SUBMIT === 'true' },
     checkpointer,
   );
@@ -102,7 +129,8 @@ async function main(): Promise<void> {
     const specPath = resolve(argument);
     const thread = values.thread ?? `feature-${stamp()}`;
     const request: RunRequest = { kind: 'feature', specPath };
-    console.log(`Thread: ${thread}`);
+    saveThreadOptions(root, thread, options);
+    console.log(`Thread: ${thread} (${options.backend}, base ${options.baseBranch})`);
     const result = await graph.invoke({ request }, { configurable: { thread_id: thread } });
     printState(result as Record<string, unknown>);
     return;
@@ -125,7 +153,8 @@ async function main(): Promise<void> {
       tag: argument,
       target: { store, flavor, track },
     };
-    console.log(`Thread: ${thread}`);
+    saveThreadOptions(root, thread, options);
+    console.log(`Thread: ${thread} (base ${options.baseBranch})`);
     const result = await graph.invoke({ request }, { configurable: { thread_id: thread } });
     printState(result as Record<string, unknown>);
     return;
@@ -144,6 +173,15 @@ async function main(): Promise<void> {
     const result = await graph.invoke(new Command({ resume }) as never, {
       configurable: { thread_id: argument },
     });
+    printState(result as Record<string, unknown>);
+    return;
+  }
+
+  if (command === 'continue') {
+    // After a crash in a node: run again from the last checkpoint, with no
+    // new answer. The node that failed restarts from its first line.
+    if (!argument) fail('usage: factory continue <thread>');
+    const result = await graph.invoke(null, { configurable: { thread_id: argument } });
     printState(result as Record<string, unknown>);
     return;
   }
