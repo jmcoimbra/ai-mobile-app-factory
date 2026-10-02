@@ -1,0 +1,182 @@
+name: CI
+
+# Every pull request, whatever its base branch, so stacked pull requests are
+# checked too. The ruleset in .github/rulesets/main.json requires every job
+# here that does not set continue-on-error.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_ID: com.example.factory
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: npm run typecheck
+
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: npm test
+
+  preview-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate the Android project
+        working-directory: apps/reference
+        run: npx expo prebuild --platform android --clean
+      - name: Build the preview APK
+        working-directory: apps/reference/android
+        # Release build type with the debug keystore the template ships:
+        # installable for review, never for a store.
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=x86_64,arm64-v8a --no-daemon
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: preview-android
+          path: apps/reference/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  e2e-android:
+    needs: preview-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: preview-android
+          path: preview
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ./.github/actions/setup-maestro
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run the Maestro flows on an emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r preview/app-release.apk
+            maestro test apps/reference/e2e -e APP_ID=${{ env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: e2e-android-report
+          path: |
+            maestro-report.xml
+            maestro-debug
+          if-no-files-found: warn
+          retention-days: 14
+
+  preview-ios:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-workspace
+      - run: xcodebuild -version
+      - name: Generate the iOS project
+        working-directory: apps/reference
+        run: npx expo prebuild --platform ios --clean
+      - name: Build for the simulator
+        working-directory: apps/reference/ios
+        run: |
+          set -euo pipefail
+          workspace=$(ls -d *.xcworkspace)
+          scheme="${workspace%.xcworkspace}"
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+          app=$(ls -d build/Build/Products/Release-iphonesimulator/*.app)
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/preview-ios.zip"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: preview-ios
+          path: ${{ runner.temp }}/preview-ios.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  e2e-ios:
+    needs: preview-ios
+    runs-on: macos-26
+    timeout-minutes: 30
+    # Reports without blocking until the iOS run proves stable (ADR 0003).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: preview-ios
+          path: preview
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ./.github/actions/setup-maestro
+      - name: Boot a simulator and install the app
+        run: |
+          set -euo pipefail
+          unzip -q preview/preview-ios.zip -d preview/app
+          udid=$(xcrun simctl list devices available -j | python3 tooling/pick-simulator.py)
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" preview/app/*.app
+          echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+      - name: Run the Maestro flows on the simulator
+        run: maestro --device "$SIMULATOR_UDID" test apps/reference/e2e -e APP_ID=${{ env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: e2e-ios-report
+          path: |
+            maestro-report.xml
+            maestro-debug
+          if-no-files-found: warn
+          retention-days: 14

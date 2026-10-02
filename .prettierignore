@@ -1,0 +1,9 @@
+node_modules
+package-lock.json
+coverage
+dist
+.expo
+apps/*/android
+apps/*/ios
+.factory
+CHANGELOG.md

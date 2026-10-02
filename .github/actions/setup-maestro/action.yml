@@ -1,0 +1,24 @@
+name: Set up Maestro
+description: Install a pinned Maestro CLI release and verify its checksum.
+inputs:
+  version:
+    description: Maestro CLI version, as in the release tag cli-<version>.
+    default: 2.11.0
+  sha256:
+    description: SHA-256 of maestro.zip for that version.
+    default: 5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MAESTRO_VERSION: ${{ inputs.version }}
+        MAESTRO_SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+          "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+        echo "${MAESTRO_SHA256}  $RUNNER_TEMP/maestro.zip" | shasum -a 256 -c -
+        unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-dist"
+        echo "$HOME/.maestro-dist/maestro/bin" >> "$GITHUB_PATH"
+        echo "MAESTRO_CLI_NO_ANALYTICS=1" >> "$GITHUB_ENV"
