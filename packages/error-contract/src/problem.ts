@@ -27,13 +27,17 @@ function optionalString(value: unknown): string | undefined {
  * Read a decoded JSON body as problem details. Returns null when it is not
  * one. RFC 9457 makes every member optional and defaults `type` to
  * "about:blank", so the test for "is this a problem" is the object shape
- * plus at least one member the RFC defines.
+ * plus at least one member of the contract: the RFC's five or `code`. A
+ * member of the wrong type makes the whole body fail the schema.
  */
 export function parseProblem(body: unknown): ProblemDetails | null {
   if (!isRecord(body)) return null;
-  const known = ['type', 'title', 'status', 'detail', 'instance'];
+  const strings = ['type', 'title', 'detail', 'instance', 'code'];
+  const known = [...strings, 'status'];
   if (!known.some((member) => member in body)) return null;
-  if ('type' in body && typeof body.type !== 'string') return null;
+  for (const member of strings) {
+    if (member in body && typeof body[member] !== 'string') return null;
+  }
   if ('status' in body && typeof body.status !== 'number') return null;
 
   return {
