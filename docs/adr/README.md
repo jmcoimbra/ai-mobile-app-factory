@@ -13,3 +13,4 @@ read from and the date of the read.
 | [0005](0005-telemetry-port-and-adapters.md) | Telemetry goes through a port with Sentry-protocol and OTLP adapters |
 | [0006](0006-distribution-paths.md) | Store paths for the public and the corporate flavor |
 | [0007](0007-error-contract-problem-details.md) | RFC 9457 problem details is the error contract |
+| [0008](0008-store-credentials-behind-a-protected-environment.md) | Store credentials live behind a protected GitHub environment |

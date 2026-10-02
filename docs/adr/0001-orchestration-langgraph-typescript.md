@@ -45,6 +45,9 @@ because the documented OpenTelemetry integration is written for Python.
 - A node restarts from its first line when it resumes. Every side effect
   lives in a node of its own, after the node that holds the `interrupt`.
 - `interrupt()` is never wrapped in `try/catch`, and a node holds at most one.
+- An `interrupt` records a person's intent. It authenticates nobody: whoever
+  can resume the thread can answer it. The control that protects the stores
+  sits outside the graph (ADR 0008).
 - LangSmith is optional. Tracing is off unless a key is configured, and
   nothing in the factory requires an account.
 - One documented gap in the JavaScript SDK: error handlers are not available

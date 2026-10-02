@@ -36,10 +36,17 @@ behind it, and the app never imports a vendor SDK directly.
   experimental, matching the status OpenTelemetry gives React Native.
 - **Default: a no-op adapter.** With no DSN and no endpoint configured, the
   app sends nothing.
-- **A PII guard runs inside the port**, before any adapter. Attributes
-  outside an allowlist are dropped, and free text is redacted for e-mail
-  addresses and phone numbers. The only identifier is a random installation
-  id.
+- **A PII guard runs inside the port**, before any adapter.
+  - Attributes outside an allowlist of keys are dropped.
+  - Free text is not sent by default: an error travels as its code, its
+    type and its stack frames, without the message.
+  - When an adopter turns messages on, they pass a redactor for e-mail
+    addresses, phone numbers and long digit runs. Pattern redaction misses
+    names and addresses, which is why it is off by default and never the
+    only control.
+  - The only identifier is a session id, random per launch and not stored.
+    A persistent installation id is an opt-in an adopter makes with their
+    privacy notice in hand.
 
 **Discarded as the crash client: Embrace.** It is the option closest to pure
 OpenTelemetry, and its OTLP export on Expo still needs hand edits to native

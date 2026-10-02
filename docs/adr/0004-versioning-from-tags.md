@@ -19,10 +19,14 @@ stores end up with different builds under one name.
 - The release workflow starts from the tag and passes it to the build as
   `APP_VERSION`. `app.config.ts` computes the three fields from it through
   `packages/app-version`. Nothing in the repository stores a build number.
+- **A release tag is a subset of SemVer:** `vMAJOR.MINOR.PATCH` with no
+  pre-release or build suffix, major from 0 to 2099, minor and patch from 0
+  to 999. `packages/app-version` rejects anything else, and the release
+  workflow fails on it.
 - `versionCode = major * 1_000_000 + minor * 1_000 + patch`, and
-  `buildNumber` is the same number as a string. Minor and patch stay below
-  1000, which keeps the result under the Google Play ceiling of 2100000000
-  for any major below 2100.
+  `buildNumber` is the same number as a string. Inside the accepted range
+  the mapping is one-to-one, grows with the version, and stays under the
+  Google Play ceiling of 2100000000.
 - A build outside a release (a pull request preview, a local run) is
   `0.0.0` with build number 1 and is never submitted.
 

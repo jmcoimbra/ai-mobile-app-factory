@@ -18,7 +18,9 @@ attached to a request that is unsafe to repeat.
   mapping from a response to an `AppError`. A body that is missing or that
   fails the schema becomes a generic `AppError` with the HTTP status kept.
 - **The message a user reads comes from a catalog keyed by `code`.** The
-  `detail` member is technical and goes to telemetry. It is never rendered.
+  `detail` member is technical and is never rendered. Telemetry receives the
+  `code`, the `type` and the HTTP status; `detail` is server-written free
+  text and stays out of events (ADR 0005).
 - **Retry with backoff applies to idempotent requests only.** RFC 9110
   defines `PUT`, `DELETE` and the safe methods as idempotent. Those are
   retried up to three times, with exponential backoff and jitter, on a

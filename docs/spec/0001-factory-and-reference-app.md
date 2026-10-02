@@ -20,7 +20,9 @@ every action that leaves the repository.
 
 1. **The factory.** A LangGraph graph, in TypeScript, that takes a feature
    spec through plan, code, tests, pull request, build and store submission.
-   Every outward action sits in its own node behind an `interrupt`.
+   Every action that reaches a store sits in its own node behind an
+   `interrupt`, and the upload itself runs behind a second approval that
+   GitHub enforces.
 2. **The reference app.** A React Native + Expo app built through the
    factory. One codebase, two flavors:
    - `public`: listed on Google Play and the App Store;
@@ -47,52 +49,78 @@ docs/                   this spec, ADRs, distribution notes, runbooks
 
 ## The graph
 
+One graph, two kinds of run. A **feature run** starts from a feature spec and
+ends when its pull request is merged. A **release run** starts from a release
+tag and ends when the build is in the stores. The tag exists because a person
+merged the release pull request that release-please opened (ADR 0004), so the
+two runs are separated by that approval.
+
 | # | Node | Kind | What it does |
 |---|---|---|---|
+| 0 | `route_entry` | deterministic | Sends a feature spec to node 1 and a release tag to node 11. |
 | 1 | `load_spec` | deterministic | Parses the feature spec. Fails when a criterion has no test name. |
 | 2 | `plan` | model | Maps each criterion to files and tests. Writes nothing. |
 | 3 | `approve_plan` | **interrupt** | A human approves, edits or rejects the plan. |
 | 4 | `implement` | agent | Writes code and tests inside an isolated git worktree. |
-| 5 | `verify` | deterministic | Lint, types, unit and component tests. Checks that every criterion's test exists and passed. |
+| 5 | `verify` | deterministic | Lint, types, unit and component tests. Checks that every criterion's test exists and passed, and that the diff touches no protected path. |
 | 6 | `review` | model | Reads the diff against the spec and the security rules. |
 | 7 | `escalate` | **interrupt** | Reached when `verify` or `review` fails three times. A human decides. |
-| 8 | `open_pull_request` | side effect | Commits, pushes and opens the pull request. CI runs E2E and the preview builds. |
+| 8 | `open_pull_request` | side effect | Commits to a branch the factory owns, pushes it and opens the pull request. CI runs E2E and the preview builds. |
 | 9 | `await_ci` | deterministic | Reads the checks. A failure returns to `implement`. |
-| 10 | `approve_merge` | **interrupt** | A human merges. The factory never merges. |
-| 11 | `prepare_release` | deterministic | Reads the release tag, derives the version numbers, builds both flavors. |
-| 12 | `approve_submission` | **interrupt** | One approval per store and flavor, showing artifact, version and track. |
-| 13 | `submit` | side effect | Uploads to the internal track or TestFlight. |
-| 14 | `approve_promotion` | **interrupt** | A human approves the move to production or to the organization. |
-| 15 | `promote` | side effect | Promotes the approved build. |
-| 16 | `report` | deterministic | Writes what happened and what was measured. |
+| 10 | `approve_merge` | **interrupt** | A human reviews and merges. The factory never merges. The feature run ends here. |
+| 11 | `load_release` | deterministic | Validates the release tag and derives the version numbers. |
+| 12 | `approve_submission` | **interrupt** | One approval per store and flavor, showing version, flavor, store and track. |
+| 13 | `submit` | side effect | Dispatches the release workflow for that store, flavor and track. The upload job waits for a reviewer in a protected GitHub environment. |
+| 14 | `approve_promotion` | **interrupt** | A human approves the move from the test track to production or to the organization. |
+| 15 | `promote` | side effect | Dispatches the promotion, behind the same protected environment. |
+| 16 | `report` | deterministic | Writes what happened and what was measured. Both kinds of run end here. |
 
 Rules the graph holds:
 
-- A side effect lives in the node after its approval. LangGraph restarts a
-  node from its first line on resume, so an upload placed before an
+- **A side effect lives in the node after its approval.** LangGraph restarts
+  a node from its first line on resume, so an upload placed before an
   `interrupt` would run twice.
-- `submit` and `promote` refuse to run unless the state carries the matching
-  approval and the environment sets `FACTORY_ALLOW_STORE_SUBMIT=true`.
-  Without both they run as a dry run and say so.
-- Model output is untrusted input. File tools reject paths outside the
-  worktree. The command runner accepts an allowlist of npm scripts. The agent
-  cannot edit `.github/`, `fastlane/`, `factory/` or the release
-  configuration, and it never sees a store credential.
+- **The pull request is the review surface.** Opening it needs no approval of
+  its own: it lands on a branch, changes nothing on `main`, and the merge is
+  a person's.
+- **The factory never holds a store credential.** An `interrupt` records
+  intent, and whoever can resume the thread can answer it, so it is not the
+  control that protects the stores. That control is the `store-submission`
+  environment in GitHub: its secrets are released to the upload job only
+  after a required reviewer approves that job (ADR 0008).
+- **`submit` and `promote` default to a dry run.** They dispatch a real
+  upload only when the state carries the matching approval and the operator
+  set `FACTORY_ALLOW_STORE_SUBMIT=true`.
+- **Model output is untrusted input.** File tools reject paths outside the
+  worktree. The command runner accepts an allowlist of npm scripts. The
+  agent's process receives no secret.
+- **Protected paths need a person.** The agent cannot change `.github/`,
+  `fastlane/`, `factory/`, the release configuration, `app.config.ts`,
+  config plugins, any `package.json` or the lockfile. These are the files
+  that execute at build time or decide what gets installed. `verify` checks
+  the diff for them, independently of the file tools.
 
 ## Slices and acceptance criteria
 
-Each slice is one pull request. Each criterion is the name of a test.
+Each slice is one pull request. Under **Tests**, each line is the exact name
+of a test. Under **Delivered with it** are the parts a test name cannot
+carry; the pull request reports how each was checked.
 
 ### Slice 1: QA pipeline green with an empty app
 
+Tests:
+
 - `home screen renders the app title`
 - `e2e: app launches and shows the home screen`
-- `ruleset requires every CI job that gates a merge`
-- CI jobs `lint`, `typecheck`, `unit`, `e2e-android`, `preview-android` and
-  `preview-ios` run on every pull request, and a ruleset on `main` blocks the
-  merge when one fails.
+- `ci workflow defines every job the ruleset requires`
+
+Delivered with it: CI jobs `lint`, `typecheck`, `unit`, `e2e-android`,
+`preview-android` and `preview-ios` on every pull request, and a ruleset on
+`main` that blocks the merge when one fails.
 
 ### Slice 2: design tokens and theming
+
+Tests:
 
 - `every text and surface pair meets WCAG AA contrast in light and dark`
 - `brand override replaces brand tokens and keeps the semantic roles`
@@ -100,6 +128,8 @@ Each slice is one pull request. Each criterion is the name of a test.
 - `interactive elements expose a role and an accessible name`
 
 ### Slice 3: error handling
+
+Tests:
 
 - `parses a problem details response into an AppError`
 - `falls back to a generic AppError when the body is not problem details`
@@ -110,23 +140,29 @@ Each slice is one pull request. Each criterion is the name of a test.
 
 ### Slice 4: telemetry
 
+Tests:
+
 - `noop adapter is the default when nothing is configured`
 - `drops attributes that are not on the allowlist`
-- `redacts email addresses and phone numbers from free text`
+- `never forwards server detail or exception messages by default`
+- `redacts email addresses, phone numbers and long digit runs from free text`
 - `captureError forwards to the configured adapter`
 - `otlp adapter exports a span to the configured endpoint`
 
 ### Slice 5: flavors and versioning
 
-- `derives version, buildNumber and versionCode from a SemVer tag`
-- `rejects a tag that is not SemVer`
-- `versionCode grows with every SemVer increment`
+Tests:
+
+- `derives version, buildNumber and versionCode from a release tag`
+- `rejects a tag outside the accepted grammar`
+- `versionCode grows with every accepted version increment`
 - `public and corporate flavors resolve distinct ids, names and icons`
 - `unknown flavor fails the config`
-- A release pull request opened by release-please carries the changelog
-  generated from Conventional Commits.
+- `release configuration builds the changelog from conventional commits`
 
 ### Slice 6: the factory graph
+
+Tests:
 
 - `fails the spec when an acceptance criterion has no test name`
 - `stops at the plan approval before any file is written`
@@ -134,25 +170,33 @@ Each slice is one pull request. Each criterion is the name of a test.
 - `returns to implement when verification fails and escalates at the limit`
 - `never reaches submit without an approved submission`
 - `submit does not run twice when the approval is resumed`
+- `submit runs as a dry run unless the operator flag is set`
 - `file tools reject a path outside the workspace`
 - `command runner rejects a command outside the allowlist`
-- `agent cannot write to a protected path`
+- `verify fails a diff that touches a protected path`
 
 ### Slice 7: publishing
 
-- `fastlane exposes build and submit lanes for both platforms and flavors`
-- `submit lanes refuse to run without the approval flag`
-- `release workflow builds from a SemVer tag only`
-- The distribution paths per flavor are documented with the vendor pages
-  that back them.
+Tests:
+
+- `fastlane exposes build and submit lanes for both platforms`
+- `release workflow builds from a release tag only`
+- `upload jobs run in the protected environment and build jobs do not`
+- `build jobs receive no store credential`
+
+Delivered with it: the distribution paths per flavor, documented with the
+vendor pages that back them, and a runbook for the first submission.
 
 ### Slice 8: the reference feature, built through the factory
 
-- The daily store checklist is specified in `specs/`, and its pull request
-  is opened by the factory.
+Tests:
+
 - `checklist lists the tasks of the day`
 - `toggling a task persists and survives a reload`
 - `e2e: manager completes the daily checklist`
+
+Delivered with it: the feature spec in `specs/`, and a pull request opened
+by the factory.
 
 ## Out of scope for the first version
 
@@ -172,12 +216,22 @@ Each slice is one pull request. Each criterion is the name of a test.
 ## Security
 
 - No secret enters the repository. Store keys, the keystore and certificates
-  live in a password manager or in GitHub secrets. Only `.env.example` is
-  versioned.
-- Telemetry events carry no personal data. The telemetry port drops every
-  attribute outside an allowlist and redacts free text.
+  live in a password manager or in GitHub environment secrets. Only
+  `.env.example` is versioned.
+- **Store credentials are released only inside the protected environment**,
+  after a required reviewer approves the job. The job that holds them runs
+  no code from the repository: it downloads a built artifact, signs it and
+  uploads it. The jobs that run repository code (install, prebuild, compile)
+  hold no store credential.
+- A release builds only from a tag on `main`, and `main` only takes
+  reviewed pull requests with green checks.
+- Telemetry events carry no personal data. The port drops every attribute
+  outside an allowlist. Server-provided text and exception messages are not
+  sent by default; when enabled they pass a redactor, which is a second
+  line of defence and no guarantee. Events carry a session id that is
+  random per launch and is not stored.
 - The message a user sees comes from a catalog keyed by error code. The
-  technical detail goes to telemetry and never to the screen.
+  technical detail never reaches the screen.
 - The factory treats model output as untrusted, as listed under the graph.
 - The corporate flavor has its own bundle identifier, signing identity and
   keys. A build of one flavor cannot be submitted as the other.
@@ -186,9 +240,10 @@ Each slice is one pull request. Each criterion is the name of a test.
 
 - A release needs a new build with no code change: it gets a new patch tag.
   The same tag never produces two store builds.
+- A tag with a minor or patch above 999, or with a pre-release suffix.
 - The process dies between an approval and its side effect: the checkpointer
-  resumes at the side-effect node, which first asks the store whether that
-  version is already there.
+  resumes at the side-effect node, which first asks GitHub whether a release
+  run for that tag, store and flavor already exists.
 - The API answers with a body that is not problem details, or with no body.
 - The device is offline during a retry sequence.
 - A flavor is requested that does not exist.
