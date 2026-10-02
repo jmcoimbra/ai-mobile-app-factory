@@ -27,7 +27,18 @@ test('ci workflow defines every job the ruleset requires', () => {
   assert.deepEqual(requiredChecks(), gatingJobs());
 });
 
+test('gating jobs always run', () => {
+  // GitHub reports a skipped required job as successful, so a job-level
+  // condition would let a merge through with the check never run.
+  for (const [id, job] of Object.entries(workflow.jobs)) {
+    if (job['continue-on-error'] === true) continue;
+    assert.equal(job.if, undefined, `gating job ${id} must not be conditional`);
+  }
+});
+
 test('ci workflow runs on every pull request', () => {
   assert.ok('pull_request' in workflow.on, 'ci.yml must run on pull_request');
-  assert.equal(workflow.on.pull_request?.branches, undefined, 'no base branch filter');
+  // No filter of any kind: types, branches or paths would leave some pull
+  // request without the checks the ruleset waits for.
+  assert.deepEqual(workflow.on.pull_request ?? {}, {});
 });
