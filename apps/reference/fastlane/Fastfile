@@ -48,6 +48,8 @@ platform :android do
     bundle = "android/app/build/outputs/bundle/release/app-release.aab"
     # The generated project signs release builds with the debug keystore.
     # Strip that signature so only the upload key ever signs what ships.
+    # Fastfile code runs inside apps/reference/fastlane, so the repository
+    # root is three levels up and the app root one level up.
     sh("../../../tooling/strip-signature.sh", "../#{bundle}")
     UI.success("unsigned bundle at apps/reference/#{bundle}")
   end
@@ -132,8 +134,12 @@ end
 platform :ios do
   desc "Archive the current flavor for devices without signing. The upload lane signs the export."
   lane :build do
-    workspace = Dir["ios/*.xcworkspace"].first
-    UI.user_error!("no workspace under ios/: run npx expo prebuild first") unless workspace
+    # Fastfile code runs inside fastlane/; action parameters resolve from
+    # the app root, so the workspace is found one level up and handed to
+    # the action without that prefix.
+    found = Dir["../ios/*.xcworkspace"].first
+    UI.user_error!("no workspace under ios/: run npx expo prebuild first") unless found
+    workspace = found.sub(%r{\A\.\./}, "")
     scheme = File.basename(workspace, ".xcworkspace")
     build_app(
       workspace: workspace,
