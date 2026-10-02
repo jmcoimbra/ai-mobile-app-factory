@@ -7,6 +7,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Started by the release-please workflow for the release pull request.
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -1,16 +1,16 @@
 import * as Sentry from '@sentry/react-native';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-import { createAppTelemetry, type AppTelemetryConfig, type SentrySdk } from './app-telemetry';
+import { appConfig } from '@/shared/config/app-config';
 
-const extra = (Constants.expoConfig?.extra ?? {}) as { telemetry?: AppTelemetryConfig };
+import { createAppTelemetry, type SentrySdk } from './app-telemetry';
 
 /** The telemetry of the running app. Routes reach it through useTelemetry(). */
 export const telemetry = createAppTelemetry(
   {
-    ...extra.telemetry,
-    version: Constants.expoConfig?.version,
+    ...appConfig.telemetry,
+    flavor: appConfig.flavor,
+    version: appConfig.version,
     platform: Platform.OS,
     debug: __DEV__,
   },

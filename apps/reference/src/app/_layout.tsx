@@ -1,6 +1,7 @@
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { appBrand } from '@/shared/config/app-config';
 import { AppErrorBoundary } from '@/shared/errors/app-error-boundary';
 import { ErrorFallback } from '@/shared/errors/error-fallback';
 import { telemetry } from '@/shared/telemetry/instance';
@@ -15,7 +16,7 @@ import { ThemeProvider } from '@/shared/theme/theme-provider';
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   telemetry.captureError(error);
   return (
-    <ThemeProvider>
+    <ThemeProvider brand={appBrand}>
       <ErrorFallback error={error} onRetry={retry} />
     </ThemeProvider>
   );
@@ -23,7 +24,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
+    <ThemeProvider brand={appBrand}>
       <TelemetryProvider telemetry={telemetry}>
         <AppErrorBoundary onError={(error) => telemetry.captureError(error)}>
           <ScreenTracker />
