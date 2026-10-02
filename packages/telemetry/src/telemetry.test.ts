@@ -118,6 +118,17 @@ describe('pii guard', () => {
     ]);
   });
 
+  test('a frame outside the repository layout keeps no user name or query string', () => {
+    const stack = [
+      'Error: x',
+      '    at boot (/Users/maria.silva/project/index.js:7:3)',
+      '    at run (https://cdn.example.com/bundle.js?user=maria.silva@example.com:1:1)',
+    ].join('\n');
+    const files = stackFrames(stack).map((frame) => frame.file);
+    assert.deepEqual(files, ['project/index.js', 'cdn.example.com/bundle.js']);
+    assert.doesNotMatch(JSON.stringify(files), /maria/);
+  });
+
   test('the session id is random per telemetry instance', () => {
     const first = createMemoryAdapter();
     const second = createMemoryAdapter();

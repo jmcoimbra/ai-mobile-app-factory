@@ -26,7 +26,8 @@ Options read for crash reporting:
 ## Decision
 
 The app talks to a **telemetry port** in `packages/telemetry`. Adapters sit
-behind it, and the app never imports a vendor SDK directly.
+behind it. Screens and features never import a vendor SDK; one composition
+root in the app initialises the SDK and hands it to the port.
 
 - **Crashes and errors: the Sentry protocol**, through `@sentry/react-native`.
   The DSN is the swap point. Pointing it at GlitchTip moves the data to an
