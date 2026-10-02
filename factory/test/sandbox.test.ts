@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { createCommandRunner, CommandError } from '../src/adapters/command-runner.ts';
@@ -118,6 +118,8 @@ describe('command runner', () => {
       'PATH',
       'npm_config_update_notifier',
     ]);
+    // The running node comes first, ahead of any version-manager shim.
+    assert.ok(env.PATH?.startsWith(dirname(process.execPath)), env.PATH);
   });
 
   test('code run from the workspace gets a scratch HOME, never the real one', async () => {

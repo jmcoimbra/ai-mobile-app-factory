@@ -1,3 +1,5 @@
+import { delimiter, dirname } from 'node:path';
+
 /**
  * What the agent may not do, in one place. The file tools enforce these
  * while the agent works, and the verify node enforces them again on the
@@ -65,11 +67,15 @@ export function childEnvironment(
   source: NodeJS.ProcessEnv = process.env,
   home: string | undefined = source.HOME,
 ): NodeJS.ProcessEnv {
-  const passthrough = ['PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'SHELL'];
+  const passthrough = ['LANG', 'LC_ALL', 'TMPDIR', 'TERM', 'SHELL'];
   const env: NodeJS.ProcessEnv = { CI: '1', NODE_ENV: 'test', npm_config_update_notifier: 'false' };
   for (const name of passthrough) {
     if (source[name] !== undefined) env[name] = source[name];
   }
+  // The directory of the running node goes first on PATH, so `node`, `npm`
+  // and `npx` resolve to real binaries. A version-manager shim would look
+  // for its configuration under HOME, which the scratch HOME does not have.
+  env.PATH = [dirname(process.execPath), source.PATH ?? ''].filter(Boolean).join(delimiter);
   if (home !== undefined) env.HOME = home;
   return env;
 }
