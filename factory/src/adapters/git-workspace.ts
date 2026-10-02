@@ -62,13 +62,22 @@ export function createGitWorkspaces(repoRoot: string, baseBranch = 'main') {
       }
     },
 
-    /** Everything that differs from the base, tracked or not. */
+    /** Everything that differs from the base, tracked or not. The scratch HOME stays out. */
     async diff(workspace: Workspace): Promise<Diff> {
+      const scope = ['--', '.', ':(exclude).factory-home'];
+      try {
+        // Drop any index entry a previous pass may have added under the scratch HOME.
+        await git(workspace.path, 'reset', '-q', '--', '.factory-home');
+      } catch {
+        // Nothing was there.
+      }
       await git(workspace.path, 'add', '--all', '--intent-to-add');
-      const files = (await git(workspace.path, 'diff', '--name-only', `origin/${baseBranch}`))
+      const files = (
+        await git(workspace.path, 'diff', '--name-only', `origin/${baseBranch}`, ...scope)
+      )
         .split('\n')
         .filter(Boolean);
-      const patch = await git(workspace.path, 'diff', `origin/${baseBranch}`);
+      const patch = await git(workspace.path, 'diff', `origin/${baseBranch}`, ...scope);
       return { files, patch };
     },
 
