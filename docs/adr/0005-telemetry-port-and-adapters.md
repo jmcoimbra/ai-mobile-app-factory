@@ -31,9 +31,13 @@ behind it, and the app never imports a vendor SDK directly.
 - **Crashes and errors: the Sentry protocol**, through `@sentry/react-native`.
   The DSN is the swap point. Pointing it at GlitchTip moves the data to an
   MIT-licensed server with no code change.
-- **Traces and usage events: OTLP over HTTP**, through the OpenTelemetry
-  JavaScript packages. The endpoint is the swap point. This adapter is marked
-  experimental, matching the status OpenTelemetry gives React Native.
+- **Traces and usage events: OTLP over HTTP, in its JSON encoding**, sent
+  with `fetch`. Spans go to `/v1/traces` and usage events go to `/v1/logs`
+  as log records. The endpoint is the swap point. The OpenTelemetry
+  JavaScript SDK is left out on the device, because OpenTelemetry does not
+  list React Native as a supported runtime; the wire format is the stable
+  part of the standard and `fetch` is enough to speak it. This adapter is
+  marked experimental, matching the status OpenTelemetry gives the platform.
 - **Default: a no-op adapter.** With no DSN and no endpoint configured, the
   app sends nothing.
 - **A PII guard runs inside the port**, before any adapter.
@@ -56,6 +60,12 @@ files that `prebuild --clean` would discard.
 
 - Each flavor has its own DSN and endpoint, read from the environment at
   build time.
+- The Sentry build plugin, which uploads source maps, is added only when a
+  Sentry organization and project are configured. A build with no account
+  has no upload step.
+- Crashes in native code are captured by the native SDKs and do not pass
+  the JavaScript scrubber. They carry a stack trace and device context
+  (model, OS version). `sendDefaultPii` stays off for them as well.
 - The Sentry SDK needs a native build. The app runs as a development build
   and never in Expo Go once this adapter is on.
 - Sentry's own OTLP ingestion is in open beta and takes traces and logs. It

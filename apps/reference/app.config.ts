@@ -6,6 +6,22 @@ const APP_NAME = 'Factory Reference';
 const APP_ID = 'com.example.factory';
 const BRAND_COLOR = '#0F766E';
 
+/**
+ * The Sentry plugin uploads source maps and debug symbols during a native
+ * build. It is added only when a project is configured, so a build with no
+ * Sentry account has no upload step to fail. Crash capture itself needs no
+ * plugin: the native SDK is autolinked.
+ */
+function sentryPlugin(): NonNullable<ExpoConfig['plugins']> {
+  const organization = process.env.SENTRY_ORG;
+  const project = process.env.SENTRY_PROJECT;
+  const url = process.env.SENTRY_URL;
+  if (!organization || !project) return [];
+  return [
+    ['@sentry/react-native/expo', { organization, project, url: url ?? 'https://sentry.io/' }],
+  ];
+}
+
 export default function config(_context: ConfigContext): ExpoConfig {
   return {
     name: APP_NAME,
@@ -31,6 +47,7 @@ export default function config(_context: ConfigContext): ExpoConfig {
     },
     plugins: [
       'expo-router',
+      ...sentryPlugin(),
       [
         'expo-splash-screen',
         {
@@ -42,6 +59,13 @@ export default function config(_context: ConfigContext): ExpoConfig {
     ],
     experiments: {
       typedRoutes: true,
+    },
+    extra: {
+      // Both empty by default: with nothing configured the app sends nothing.
+      telemetry: {
+        sentryDsn: process.env.SENTRY_DSN ?? '',
+        otlpEndpoint: process.env.OTLP_ENDPOINT ?? '',
+      },
     },
   };
 }
