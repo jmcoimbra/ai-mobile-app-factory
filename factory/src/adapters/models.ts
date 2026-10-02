@@ -6,6 +6,7 @@ import { ALLOWED_SCRIPTS, isProtectedPath } from '../policy.ts';
 import type { Diff, ImplementContext, ReviewResult } from '../ports.ts';
 import type { FeatureSpec } from '../spec.ts';
 import { createCommandRunner } from './command-runner.ts';
+import { REPOSITORY_RULES } from './prompts.ts';
 import { Sandbox } from './sandbox.ts';
 
 /** Provider and model in LangChain's `provider:model` form. */
@@ -28,13 +29,6 @@ function textOf(content: unknown): string {
   }
   return '';
 }
-
-const REPOSITORY_RULES = `Rules of this repository:
-- Every acceptance criterion is the exact name of a test. Write each test with that name, character for character.
-- Unit and component tests run with Jest in apps/reference and with node:test in packages/. A criterion whose name starts with "e2e:" is a Maestro flow in apps/reference/e2e whose "name:" is that exact string.
-- User-facing error text comes from the message catalog in packages/error-contract. Telemetry goes through packages/telemetry. Colours and spacing come from packages/design-tokens.
-- Never touch package manifests, lockfiles, app.config.ts, config plugins, workflows, fastlane or the factory. Those paths are protected and the write tool refuses them.
-- Run "lint", "typecheck" and "test" before finishing, and fix what they report. Run "format" to apply Prettier.`;
 
 export function createModelAdapters(options: ModelOptions = {}) {
   const modelName = options.model ?? process.env.FACTORY_MODEL ?? DEFAULT_MODEL;

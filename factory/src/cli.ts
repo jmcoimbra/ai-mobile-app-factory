@@ -2,7 +2,7 @@
 /**
  * The factory's command line.
  *
- *   factory feature <spec.md>                    start a feature run
+ *   factory feature <spec.md> [--backend langchain|claude-code] [--base main]
  *   factory release <tag> --store play|appstore --flavor public|corporate [--track internal]
  *   factory resume <thread> --approve|--reject|--retry|--abort [--by <name>] [--note <text>]
  *   factory status <thread>
@@ -69,6 +69,8 @@ async function main(): Promise<void> {
       track: { type: 'string' },
       thread: { type: 'string' },
       model: { type: 'string' },
+      backend: { type: 'string' },
+      base: { type: 'string' },
       approve: { type: 'boolean' },
       reject: { type: 'boolean' },
       retry: { type: 'boolean' },
@@ -84,7 +86,13 @@ async function main(): Promise<void> {
   mkdirSync(resolve(root, '.factory'), { recursive: true });
   const checkpointer = SqliteSaver.fromConnString(resolve(root, '.factory', 'checkpoints.sqlite'));
   const graph = buildFactoryGraph(
-    createDeps({ repoRoot: root, repo: repoSlug(), model: values.model }),
+    createDeps({
+      repoRoot: root,
+      repo: repoSlug(),
+      model: values.model,
+      backend: values.backend === 'claude-code' ? 'claude-code' : 'langchain',
+      baseBranch: values.base ?? process.env.FACTORY_BASE_BRANCH ?? 'main',
+    }),
     { allowStoreSubmit: process.env.FACTORY_ALLOW_STORE_SUBMIT === 'true' },
     checkpointer,
   );

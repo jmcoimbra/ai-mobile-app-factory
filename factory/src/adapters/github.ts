@@ -16,6 +16,8 @@ export interface GitHubOptions {
   repo: string;
   /** Workflow file the release runs come from. */
   releaseWorkflow?: string;
+  /** The branch pull requests target. */
+  baseBranch?: string;
   pollIntervalMs?: number;
   maxWaitMs?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -27,6 +29,7 @@ export function createGitHub(options: GitHubOptions) {
   const {
     repo,
     releaseWorkflow = 'release.yml',
+    baseBranch = 'main',
     pollIntervalMs = 60_000,
     maxWaitMs = 90 * 60_000,
     sleep = defaultSleep,
@@ -61,7 +64,7 @@ export function createGitHub(options: GitHubOptions) {
           '--head',
           input.branch,
           '--base',
-          'main',
+          baseBranch,
           '--title',
           input.title,
           '--body',
