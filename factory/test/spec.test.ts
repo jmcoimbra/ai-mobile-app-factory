@@ -83,6 +83,14 @@ describe('reading the reviewer', () => {
     );
     // ok with findings is a contradiction: blocked.
     assert.equal(parseReview('{"ok": true, "findings": ["x"]}').ok, false);
+    // Notes are what is fine or unverified; they never block.
+    assert.deepEqual(
+      parseReview('{"ok": true, "findings": [], "notes": ["criterion 1 covered"]}'),
+      {
+        ok: true,
+        findings: [],
+      },
+    );
     assert.equal(parseReview('I think it is fine').ok, false);
     assert.equal(parseReview('').ok, false);
   });
