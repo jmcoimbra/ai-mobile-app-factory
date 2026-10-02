@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# generated native folders (Continuous Native Generation)
+/apps/*/ios
+/apps/*/android
+
+# signing material never enters the repository
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+credentials.json
+play-service-account*.json
+
+# env files: only .env.example is versioned
+.env
+.env.*
+!.env.example
+
+# build and test output
+coverage/
+*.tsbuildinfo
+.metro-health-check*
+*.orig.*
+.kotlin/
+
+# factory runtime state (checkpoints, workspaces)
+.factory/
+
+# fastlane output
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+
+# editors and OS
+.DS_Store
+.idea/
+npm-debug.*
