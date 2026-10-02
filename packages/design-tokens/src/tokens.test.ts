@@ -45,10 +45,12 @@ describe('brand override', () => {
       const after = branded[scheme].colors;
       // The same roles exist, whatever the brand.
       assert.deepEqual(Object.keys(after).sort(), Object.keys(before).sort());
-      // Brand-owned roles follow the brand.
-      assert.equal(after.brand, corporateBrand[scheme].brand);
-      assert.equal(after.onBrand, corporateBrand[scheme].onBrand);
-      assert.notEqual(after.brand, before.brand);
+      // Every brand-owned role follows the brand, and each one differs from the default.
+      for (const role of ['brand', 'brandPressed', 'onBrand', 'brandText'] as const) {
+        assert.equal(after[role], corporateBrand[scheme][role], `${scheme} ${role}`);
+        assert.notEqual(after[role], before[role], `${scheme} ${role} did not change`);
+      }
+      assert.equal(after.focusRing, corporateBrand[scheme].brandText);
       // Everything the brand does not own is untouched.
       const brandOwned = new Set(['brand', 'brandPressed', 'onBrand', 'brandText', 'focusRing']);
       for (const role of Object.keys(before) as (keyof typeof before)[]) {
