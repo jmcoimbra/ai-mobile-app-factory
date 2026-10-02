@@ -196,11 +196,15 @@ jobs:
           STORE_SUBMISSION_APPROVED: 'true'
           DRY_RUN: ${{ inputs.dry_run }}
           APP_ID: ${{ needs.validate.outputs.app_id }}
-          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
-          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
-          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          # Each flavor has its own upload key (spec 0001, Security).
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ inputs.flavor == 'corporate' && secrets.ANDROID_UPLOAD_KEYSTORE_BASE64_CORPORATE || secrets.ANDROID_UPLOAD_KEYSTORE_BASE64_PUBLIC }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ inputs.flavor == 'corporate' && secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD_CORPORATE || secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD_PUBLIC }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ inputs.flavor == 'corporate' && secrets.ANDROID_UPLOAD_KEY_ALIAS_CORPORATE || secrets.ANDROID_UPLOAD_KEY_ALIAS_PUBLIC }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: bundle exec fastlane android upload bundle:"$RUNNER_TEMP/bundle/app-release.aab" track:"${{ inputs.track }}"
+          TRACK: ${{ inputs.track }}
+        # Inputs reach the shell through the environment, never by
+        # interpolation into the command.
+        run: bundle exec fastlane android upload bundle:"$RUNNER_TEMP/bundle/app-release.aab" track:"$TRACK"
 
   upload-ios:
     needs: [validate, build-ios]
@@ -264,7 +268,8 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           APP_ID: ${{ needs.validate.outputs.app_id }}
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-        run: bundle exec fastlane android promote from:"${{ inputs.track }}" to:production
+          TRACK: ${{ inputs.track }}
+        run: bundle exec fastlane android promote from:"$TRACK" to:production
 
   promote-ios:
     needs: validate
@@ -289,4 +294,5 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
-        run: bundle exec fastlane ios promote build_number:"${{ needs.validate.outputs.build_number }}"
+          BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
+        run: bundle exec fastlane ios promote build_number:"$BUILD_NUMBER"

@@ -102,6 +102,20 @@ test('upload jobs run in the protected environment and build jobs do not', () =>
   }
 });
 
+test('credential jobs take inputs through the environment, never in the command', () => {
+  for (const [id, job] of jobs) {
+    if (!/^(upload|promote)-/.test(id)) continue;
+    for (const step of job.steps) {
+      if (typeof step.run !== 'string') continue;
+      assert.doesNotMatch(
+        step.run,
+        /\$\{\{\s*(inputs|github\.event)/,
+        `${id}: an input is interpolated into a shell command`,
+      );
+    }
+  }
+});
+
 test('build jobs receive no store credential', () => {
   for (const [id, job] of jobs) {
     const text = JSON.stringify(job);

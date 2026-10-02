@@ -28,21 +28,21 @@ approval (ADR 0006).
 ## 3. The protected environment
 
 ```bash
-tooling/apply-environment.sh <owner>/<repo>
+tooling/apply-environment.sh <owner>/<repo> [<reviewer>]
 ```
 
 This creates the `store-submission` environment with the repository owner
-as required reviewer and deployments allowed from `v*` tags only. Add the
+(or the person or team named) as required reviewer and deployments allowed from `v*` tags only. Add the
 secrets below to that environment, never to the repository. A team sets
 "prevent self-review" on (ADR 0008).
 
-| Secret                                                                                | What it is                                                                                            |
-| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `ANDROID_UPLOAD_KEYSTORE_BASE64`                                                      | The upload keystore, base64. Generated once with `keytool`, backed up in the password manager.        |
-| `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`                        | Its password and key alias.                                                                           |
-| `PLAY_SERVICE_ACCOUNT_JSON`                                                           | A Play Console service account with release permission, as JSON.                                      |
-| `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_P8` | An App Store Connect API key with the App Manager role; the `.p8` as base64.                          |
-| `MATCH_GIT_URL`, `MATCH_GIT_BASIC_AUTHORIZATION`, `MATCH_PASSWORD`                    | The private repository where `match` keeps the iOS signing identities, its token, and the passphrase. |
+| Secret                                                                                                  | What it is                                                                                                        |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `ANDROID_UPLOAD_KEYSTORE_BASE64_PUBLIC`, `ANDROID_UPLOAD_KEYSTORE_BASE64_CORPORATE`                     | One upload keystore per flavor, base64. Each generated once with `keytool` and backed up in the password manager. |
+| `ANDROID_UPLOAD_KEYSTORE_PASSWORD_PUBLIC`, `ANDROID_UPLOAD_KEY_ALIAS_PUBLIC`, and the `_CORPORATE` pair | Their passwords and key aliases.                                                                                  |
+| `PLAY_SERVICE_ACCOUNT_JSON`                                                                             | A Play Console service account with release permission, as JSON.                                                  |
+| `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_P8`                   | An App Store Connect API key with the App Manager role; the `.p8` as base64.                                      |
+| `MATCH_GIT_URL`, `MATCH_GIT_BASIC_AUTHORIZATION`, `MATCH_PASSWORD`                                      | The private repository where `match` keeps the iOS signing identities, its token, and the passphrase.             |
 
 ## 4. The first upload is manual on Google Play
 
