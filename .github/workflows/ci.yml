@@ -28,6 +28,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-workspace
       - run: npm run lint
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - name: The Fastfile parses and lists its lanes
+        working-directory: apps/reference
+        run: bundle exec fastlane lanes
+      - name: Submit lanes refuse to run without the approval flag
+        working-directory: apps/reference
+        env:
+          APP_ID: com.example.factory
+        # The lane must fail before it does anything, naming the flag.
+        run: |
+          set -euo pipefail
+          if bundle exec fastlane android upload bundle:none.aab > "$RUNNER_TEMP/upload.log" 2>&1; then
+            echo "the upload lane ran without the approval flag" >&2
+            exit 1
+          fi
+          grep -q "STORE_SUBMISSION_APPROVED is not 'true'" "$RUNNER_TEMP/upload.log"
 
   typecheck:
     runs-on: ubuntu-latest

@@ -1,0 +1,292 @@
+name: Release
+
+# Builds one flavor from a release tag and, in a job that waits for a
+# reviewer in the store-submission environment, signs and uploads it.
+# Started by the factory's release run or by hand. docs/adr/0008 explains
+# why build and upload are separate jobs.
+run-name: ${{ inputs.action }} ${{ inputs.tag }} ${{ inputs.store }} ${{ inputs.flavor }} ${{ inputs.track }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, vMAJOR.MINOR.PATCH, already on main
+        required: true
+        type: string
+      store:
+        description: Store
+        required: true
+        type: choice
+        options: [play, appstore]
+      flavor:
+        description: Flavor
+        required: true
+        type: choice
+        options: [public, corporate]
+      track:
+        description: Play track, or the TestFlight group on the App Store
+        default: internal
+        type: string
+      action:
+        description: submit uploads to the test track, promote moves it on
+        default: submit
+        type: choice
+        options: [submit, promote]
+      dry_run:
+        description: Build, sign with a throwaway key and upload nothing
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}-${{ inputs.store }}-${{ inputs.flavor }}
+  cancel-in-progress: false
+
+env:
+  APP_VERSION: ${{ inputs.tag }}
+  APP_VARIANT: ${{ inputs.flavor }}
+  APP_ID_PUBLIC: ${{ vars.APP_ID_PUBLIC }}
+  APP_ID_CORPORATE: ${{ vars.APP_ID_CORPORATE }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      app_id: ${{ steps.version.outputs.app_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+      - name: The tag is on main
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "refs/tags/$TAG" origin/main
+      - uses: ./.github/actions/setup-workspace
+      - name: The tag is a release tag and resolves to a version
+        id: version
+        working-directory: apps/reference
+        run: |
+          set -euo pipefail
+          npx expo config --type public --json > "$RUNNER_TEMP/config.json"
+          version=$(node -p "require('$RUNNER_TEMP/config.json').version")
+          build_number=$(node -p "require('$RUNNER_TEMP/config.json').ios.buildNumber")
+          app_id=$(node -p "require('$RUNNER_TEMP/config.json').android.package")
+          test "$version" != "0.0.0"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          echo "app_id=$app_id" >> "$GITHUB_OUTPUT"
+          echo "building $app_id $version ($build_number)"
+
+  build-android:
+    needs: validate
+    if: inputs.store == 'play' && inputs.action == 'submit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: ./.github/actions/setup-workspace
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - name: Generate the Android project
+        working-directory: apps/reference
+        run: npx expo prebuild --platform android --clean
+      - name: Build the unsigned bundle
+        working-directory: apps/reference
+        env:
+          APP_ID: ${{ needs.validate.outputs.app_id }}
+        run: bundle exec fastlane android build
+      - name: Record the checksum
+        working-directory: apps/reference/android/app/build/outputs/bundle/release
+        run: sha256sum app-release.aab > app-release.aab.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bundle-${{ inputs.flavor }}-${{ inputs.tag }}
+          path: |
+            apps/reference/android/app/build/outputs/bundle/release/app-release.aab
+            apps/reference/android/app/build/outputs/bundle/release/app-release.aab.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  build-ios:
+    needs: validate
+    if: inputs.store == 'appstore' && inputs.action == 'submit'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: ./.github/actions/setup-workspace
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - name: Generate the iOS project
+        working-directory: apps/reference
+        run: npx expo prebuild --platform ios --clean
+      - name: Archive without signing
+        working-directory: apps/reference
+        env:
+          APP_ID: ${{ needs.validate.outputs.app_id }}
+        run: bundle exec fastlane ios build
+      - name: Pack the archive and record the checksum
+        working-directory: apps/reference/build
+        run: |
+          set -euo pipefail
+          archive=$(ls -d *.xcarchive)
+          ditto -c -k --keepParent "$archive" archive.zip
+          shasum -a 256 archive.zip > archive.zip.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: archive-${{ inputs.flavor }}-${{ inputs.tag }}
+          path: |
+            apps/reference/build/archive.zip
+            apps/reference/build/archive.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  # The jobs below reference the protected environment. GitHub releases its
+  # secrets only after a required reviewer approves the job. They check out
+  # the tag for the lanes alone and install no npm dependency, so no script
+  # a dependency or the app config carries runs next to a credential.
+  upload-android:
+    needs: [validate, build-android]
+    if: inputs.store == 'play' && inputs.action == 'submit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: store-submission
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bundle-${{ inputs.flavor }}-${{ inputs.tag }}
+          path: ${{ runner.temp }}/bundle
+      - name: Verify the checksum
+        working-directory: ${{ runner.temp }}/bundle
+        run: sha256sum -c app-release.aab.sha256
+      - name: Sign and upload
+        working-directory: apps/reference
+        env:
+          STORE_SUBMISSION_APPROVED: 'true'
+          DRY_RUN: ${{ inputs.dry_run }}
+          APP_ID: ${{ needs.validate.outputs.app_id }}
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: bundle exec fastlane android upload bundle:"$RUNNER_TEMP/bundle/app-release.aab" track:"${{ inputs.track }}"
+
+  upload-ios:
+    needs: [validate, build-ios]
+    if: inputs.store == 'appstore' && inputs.action == 'submit'
+    runs-on: macos-26
+    timeout-minutes: 45
+    environment: store-submission
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: archive-${{ inputs.flavor }}-${{ inputs.tag }}
+          path: ${{ runner.temp }}/archive
+      - name: Verify the checksum and unpack
+        working-directory: ${{ runner.temp }}/archive
+        run: |
+          set -euo pipefail
+          shasum -a 256 -c archive.zip.sha256
+          ditto -x -k archive.zip .
+      - name: Sign and upload
+        working-directory: apps/reference
+        env:
+          STORE_SUBMISSION_APPROVED: 'true'
+          DRY_RUN: ${{ inputs.dry_run }}
+          APP_ID: ${{ needs.validate.outputs.app_id }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          archive=$(ls -d "$RUNNER_TEMP"/archive/*.xcarchive)
+          bundle exec fastlane ios upload archive:"$archive"
+
+  promote-android:
+    needs: validate
+    if: inputs.store == 'play' && inputs.action == 'promote'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: store-submission
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - name: Promote
+        working-directory: apps/reference
+        env:
+          STORE_SUBMISSION_APPROVED: 'true'
+          DRY_RUN: ${{ inputs.dry_run }}
+          APP_ID: ${{ needs.validate.outputs.app_id }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: bundle exec fastlane android promote from:"${{ inputs.track }}" to:production
+
+  promote-ios:
+    needs: validate
+    if: inputs.store == 'appstore' && inputs.action == 'promote'
+    runs-on: macos-26
+    timeout-minutes: 20
+    environment: store-submission
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: apps/reference
+          bundler-cache: true
+      - name: Submit for review
+        working-directory: apps/reference
+        env:
+          STORE_SUBMISSION_APPROVED: 'true'
+          DRY_RUN: ${{ inputs.dry_run }}
+          APP_ID: ${{ needs.validate.outputs.app_id }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+        run: bundle exec fastlane ios promote build_number:"${{ needs.validate.outputs.build_number }}"

@@ -1,0 +1,4 @@
+# Identifiers come from the environment, per flavor (see app.config.ts and
+# config/flavors.ts). Nothing here is a secret. Credentials for the stores
+# are read by the lanes from the environment of the protected job only.
+app_identifier(ENV.fetch("APP_ID", "com.example.factory"))

@@ -27,7 +27,10 @@ a build job that holds store keys exposes them to that code.
     unsigned Android bundle and an unsigned iOS archive, with checksums.
   - The upload job references the protected environment. It downloads the
     artifacts, verifies the checksums, signs, and uploads with Fastlane
-    actions from a pinned Gemfile. It runs no script from the repository.
+    actions from a pinned Gemfile. It installs no npm dependency and runs
+    no app config, so nothing a dependency or the app carries executes
+    next to a credential. The lanes it runs live under `fastlane/`, a
+    protected path only a person changes.
 - **The environment accepts deployments only from release tags.**
 - **Files that execute at build time are protected paths for the agent**
   (spec 0001). A person authors those changes.
@@ -42,9 +45,13 @@ a build job that holds store keys exposes them to that code.
 - Required reviewers and environment secrets are available to public
   repositories on the GitHub Free plan. A private repository needs a paid
   plan for them.
-- Signing after the build needs the unsigned outputs to be signable:
-  `jarsigner` on the Android bundle, and `xcodebuild -exportArchive` on the
-  iOS archive. Slice 7 proves both in a dry run before any real key exists.
+- Signing after the build needs the unsigned outputs to be signable. On
+  Android, the build job strips the debug signature from the bundle and the
+  upload job signs it with `jarsigner`; a dry run proves the path with a
+  throwaway key. On iOS, the build job archives with code signing off and
+  the upload job exports with manual signing through `match`; that path
+  runs only once an Apple signing identity exists, so a dry run with no
+  identity checks the archive and exports nothing.
 
 ## Sources, read on 2026-10-02
 

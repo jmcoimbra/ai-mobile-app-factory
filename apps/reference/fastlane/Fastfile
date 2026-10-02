@@ -1,0 +1,205 @@
+# Lanes of the reference app.
+#
+# `build` lanes run in the build job of .github/workflows/release.yml, with
+# no store credential, and produce unsigned outputs. `upload` and `promote`
+# lanes run in the job that references the protected GitHub environment
+# (docs/adr/0008). They refuse to run anywhere else: the environment sets
+# STORE_SUBMISSION_APPROVED only after a reviewer approved the job.
+#
+# Every lane reads APP_VARIANT (public or corporate) and APP_ID. The
+# native projects are generated beforehand with `npx expo prebuild`.
+
+fastlane_require "digest"
+
+APPROVAL_FLAG = "STORE_SUBMISSION_APPROVED".freeze
+
+def require_approval!
+  return if ENV[APPROVAL_FLAG] == "true"
+
+  UI.user_error!("#{APPROVAL_FLAG} is not 'true'. Upload and promote lanes run only in the " \
+                 "protected environment, after a reviewer approved the job.")
+end
+
+def dry_run?
+  ENV["DRY_RUN"] == "true"
+end
+
+def flavor
+  ENV.fetch("APP_VARIANT", "public")
+end
+
+def app_id
+  ENV.fetch("APP_ID")
+end
+
+def api_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+    issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+    key_content: ENV.fetch("APP_STORE_CONNECT_KEY_P8"),
+    is_key_content_base64: true
+  )
+end
+
+platform :android do
+  desc "Build the release bundle of the current flavor. Unsigned: the upload lane signs it."
+  lane :build do
+    gradle(task: "bundle", build_type: "Release", project_dir: "android", flags: "--no-daemon")
+    bundle = "android/app/build/outputs/bundle/release/app-release.aab"
+    # The generated project signs release builds with the debug keystore.
+    # Strip that signature so only the upload key ever signs what ships.
+    sh("../../../tooling/strip-signature.sh", "../#{bundle}")
+    UI.success("unsigned bundle at apps/reference/#{bundle}")
+  end
+
+  desc "Sign the bundle with the upload key and send it to a Play track. Protected environment only."
+  lane :upload do |options|
+    require_approval!
+    bundle = options.fetch(:bundle)
+    track = options.fetch(:track, "internal")
+    signed = sign_bundle(bundle)
+
+    if dry_run?
+      UI.important("dry run: the bundle is signed and verified, nothing is uploaded")
+      next
+    end
+
+    upload_to_play_store(
+      package_name: app_id,
+      aab: signed,
+      track: track,
+      json_key_data: ENV.fetch("PLAY_SERVICE_ACCOUNT_JSON"),
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Promote a build from one Play track to another. Protected environment only."
+  lane :promote do |options|
+    require_approval!
+    from = options.fetch(:from, "internal")
+    to = options.fetch(:to, "production")
+
+    if dry_run?
+      UI.important("dry run: would promote #{app_id} from #{from} to #{to}")
+      next
+    end
+
+    upload_to_play_store(
+      package_name: app_id,
+      track: from,
+      track_promote_to: to,
+      json_key_data: ENV.fetch("PLAY_SERVICE_ACCOUNT_JSON"),
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  # Signs an unsigned bundle with the upload keystore from the environment.
+  # In a dry run with no keystore, a throwaway key proves the path.
+  private_lane :sign_bundle do |bundle|
+    keystore = "upload.keystore"
+    if ENV["ANDROID_UPLOAD_KEYSTORE_BASE64"].to_s.empty?
+      UI.user_error!("no upload keystore in the environment") unless dry_run?
+      UI.important("dry run: signing with a throwaway key")
+      sh("keytool", "-genkeypair", "-keystore", keystore, "-storepass", "dry-run-only",
+         "-alias", "upload", "-keyalg", "RSA", "-keysize", "2048", "-validity", "1",
+         "-dname", "CN=dry run")
+      password = "dry-run-only"
+      alias_name = "upload"
+    else
+      File.binwrite(keystore, Base64.decode64(ENV.fetch("ANDROID_UPLOAD_KEYSTORE_BASE64")))
+      password = ENV.fetch("ANDROID_UPLOAD_KEYSTORE_PASSWORD")
+      alias_name = ENV.fetch("ANDROID_UPLOAD_KEY_ALIAS")
+    end
+
+    signed = bundle.sub(/\.aab\z/, "-signed.aab")
+    FileUtils.cp(bundle, signed)
+    sh("jarsigner", "-keystore", keystore, "-storepass", password,
+       "-sigalg", "SHA256withRSA", "-digestalg", "SHA-256", signed, alias_name)
+    sh("jarsigner", "-verify", "-strict", signed)
+    UI.success("signed bundle at #{signed}, sha256 #{Digest::SHA256.file(signed).hexdigest}")
+    signed
+  end
+end
+
+platform :ios do
+  desc "Archive the current flavor for devices without signing. The upload lane signs the export."
+  lane :build do
+    workspace = Dir["ios/*.xcworkspace"].first
+    UI.user_error!("no workspace under ios/: run npx expo prebuild first") unless workspace
+    scheme = File.basename(workspace, ".xcworkspace")
+    build_app(
+      workspace: workspace,
+      scheme: scheme,
+      configuration: "Release",
+      skip_codesigning: true,
+      skip_package_ipa: true,
+      archive_path: "build/#{scheme}.xcarchive",
+      output_directory: "build"
+    )
+    UI.success("unsigned archive at apps/reference/build/#{scheme}.xcarchive")
+  end
+
+  desc "Sign the archive and send it to TestFlight. Protected environment only."
+  lane :upload do |options|
+    require_approval!
+    archive = options.fetch(:archive)
+
+    if ENV["MATCH_GIT_URL"].to_s.empty?
+      UI.user_error!("no signing storage (MATCH_GIT_URL) in the environment") unless dry_run?
+      UI.important("dry run: no Apple signing identity available, the archive is checked and nothing is exported")
+      UI.user_error!("archive not found at #{archive}") unless File.directory?(archive)
+      next
+    end
+
+    sync_code_signing(type: "appstore", readonly: true, app_identifier: app_id, api_key: api_key)
+    profile = lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING][app_id]
+    ipa = build_app(
+      skip_build_archive: true,
+      archive_path: archive,
+      export_method: "app-store",
+      export_options: {
+        signingStyle: "manual",
+        provisioningProfiles: { app_id => profile }
+      },
+      output_directory: "build"
+    )
+
+    if dry_run?
+      UI.important("dry run: the ipa is signed at #{ipa}, nothing is uploaded")
+      next
+    end
+
+    upload_to_testflight(api_key: api_key, ipa: ipa, skip_waiting_for_build_processing: true)
+  end
+
+  desc "Submit the uploaded build for App Store review. Protected environment only."
+  lane :promote do |options|
+    require_approval!
+    build_number = options.fetch(:build_number)
+
+    if dry_run?
+      UI.important("dry run: would submit build #{build_number} of #{app_id} for review")
+      next
+    end
+
+    upload_to_app_store(
+      api_key: api_key,
+      app_identifier: app_id,
+      build_number: build_number,
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: true,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

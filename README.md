@@ -21,6 +21,21 @@ Status: under construction, one slice per pull request.
   Fastlane, Maestro, versions from tags, telemetry, store distribution and
   the error contract.
 
+## How a change ships
+
+1. A feature spec in `specs/` goes through the factory: plan, approval,
+   code, checks, review, pull request. A person merges.
+2. release-please keeps a release pull request open with the changelog.
+   Merging it creates the tag `vX.Y.Z`; the app's version fields derive from
+   that tag and are never edited by hand.
+3. A release run builds one flavor from the tag and asks for an approval
+   per store. The upload job waits for a reviewer in the `store-submission`
+   environment, which is where the store credentials live. Without the
+   operator flag the run is a dry run that uploads nothing.
+
+Setting up the stores, the environment and the ruleset:
+[docs/runbooks/first-store-submission.md](docs/runbooks/first-store-submission.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
