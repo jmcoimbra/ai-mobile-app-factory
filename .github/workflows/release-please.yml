@@ -17,6 +17,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # Release Please labels its pull requests, which needs issues: write.
+      issues: write
       actions: write
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
