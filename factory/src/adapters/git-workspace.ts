@@ -72,12 +72,13 @@ export function createGitWorkspaces(repoRoot: string, baseBranch = 'main') {
         // Nothing was there.
       }
       await git(workspace.path, 'add', '--all', '--intent-to-add');
-      const files = (
-        await git(workspace.path, 'diff', '--name-only', `origin/${baseBranch}`, ...scope)
-      )
+      // Against the point the workspace was cut from, so commits that
+      // landed on the base since then do not read as the agent's changes.
+      const base = await git(workspace.path, 'merge-base', `origin/${baseBranch}`, 'HEAD');
+      const files = (await git(workspace.path, 'diff', '--name-only', base, ...scope))
         .split('\n')
         .filter(Boolean);
-      const patch = await git(workspace.path, 'diff', `origin/${baseBranch}`, ...scope);
+      const patch = await git(workspace.path, 'diff', base, ...scope);
       return { files, patch };
     },
 
