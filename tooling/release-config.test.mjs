@@ -48,5 +48,10 @@ test('the release pull request gets the required checks', () => {
     ),
     'the release workflow must start CI on the release branch',
   );
-  assert.equal(workflow.jobs['release-please'].permissions.actions, 'write');
+  const permissions = workflow.jobs['release-please'].permissions;
+  assert.equal(permissions.actions, 'write');
+  // Documented by release-please-action: labels need issues: write.
+  assert.equal(permissions.issues, 'write');
+  assert.equal(permissions['pull-requests'], 'write');
+  assert.equal(permissions.contents, 'write');
 });

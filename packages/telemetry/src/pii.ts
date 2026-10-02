@@ -64,6 +64,18 @@ export function sanitizeAttributes(
   return clean;
 }
 
+/**
+ * Keep the path from the last repository segment on. A path with no such
+ * segment keeps its last two parts: an absolute path or a URL can carry a
+ * user name or a query string.
+ */
+function shortFile(file: string): string {
+  const fromSegment = /(?:^|\/)((?:node_modules|src|packages|apps)\/.*)$/.exec(file)?.[1];
+  if (fromSegment) return fromSegment;
+  const withoutQuery = file.replace(/[?#].*$/, '');
+  return withoutQuery.split('/').filter(Boolean).slice(-2).join('/');
+}
+
 export interface StackFrame {
   function: string;
   file: string;
@@ -81,12 +93,9 @@ export function stackFrames(stack: string | undefined, limit = 30): StackFrame[]
     // V8 and Hermes: "    at fn (file:line:col)" or "    at file:line:col".
     const match = /^\s*at (?:(.+?) \()?(.+?):(\d+):\d+\)?$/.exec(line);
     if (!match) continue;
-    const file = match[2] ?? '';
     frames.push({
       function: match[1] ?? '<anonymous>',
-      // Keep the path from the last node_modules or src segment on: an
-      // absolute path can carry a user name.
-      file: file.replace(/^.*\/(?=(?:node_modules|src|packages|apps)\/)/, ''),
+      file: shortFile(match[2] ?? ''),
       line: Number(match[3]),
     });
     if (frames.length >= limit) break;

@@ -40,6 +40,20 @@ describe('reading an error response', () => {
     assert.equal(error.message, 'checklist.task_not_found');
   });
 
+  test('a body with only the code member is still problem details', async () => {
+    const body = JSON.stringify({ code: 'checklist.task_not_found' });
+    const error = await appErrorFromResponse(response(404, body, problemHeaders));
+    assert.equal(error.code, 'checklist.task_not_found');
+    assert.equal(error.type, 'about:blank');
+  });
+
+  test('a member of the wrong type fails the schema and becomes a generic error', async () => {
+    const body = JSON.stringify({ title: 42, code: 'checklist.task_not_found' });
+    const error = await appErrorFromResponse(response(404, body, problemHeaders));
+    assert.equal(error.code, 'resource.not_found');
+    assert.equal(error.detail, undefined);
+  });
+
   test('a problem with an unknown code falls back to the code of its status', async () => {
     const body = JSON.stringify({ type: 'about:blank', status: 409, code: 'made.up' });
     const error = await appErrorFromResponse(response(409, body, problemHeaders));
