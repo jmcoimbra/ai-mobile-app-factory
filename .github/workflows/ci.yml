@@ -170,6 +170,10 @@ jobs:
           xcrun simctl install "$udid" preview/app/*.app
           echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
       - name: Run the Maestro flows on the simulator
+        env:
+          # The XCTest driver takes longer than Maestro's default to come up
+          # on a hosted runner; measured 2026-10-02 at over two minutes.
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'
         run: maestro --device "$SIMULATOR_UDID" test apps/reference/e2e -e APP_ID=${{ env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
