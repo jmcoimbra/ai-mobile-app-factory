@@ -1,4 +1,4 @@
-# mobile-app-factory
+# ai-mobile-app-factory
 
 An agent-driven factory that takes a feature specification to a tested,
 versioned and store-ready mobile app.
@@ -11,8 +11,15 @@ versioned and store-ready mobile app.
   codebase: a public store app and a corporate app restricted to a company's
   staff.
 
-Status: bootstrapping. The specification and the architecture decisions land
-first, in `docs/`.
+Status: under construction, one slice per pull request.
+
+## Where to start
+
+- [The spec](docs/spec/0001-factory-and-reference-app.md): what gets built,
+  the graph, the slices and their acceptance criteria.
+- [Architecture decisions](docs/adr/README.md): LangGraph in TypeScript,
+  Fastlane, Maestro, versions from tags, telemetry, store distribution and
+  the error contract.
 
 ## License
 

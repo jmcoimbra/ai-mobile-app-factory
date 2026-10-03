@@ -1,0 +1,29 @@
+{
+  "name": "ai-mobile-app-factory",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "factory"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test:tooling && npm run test --workspaces --if-present",
+    "test:tooling": "node --test \"tooling/**/*.test.mjs\""
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9",
+    "yaml": "^2.8.0"
+  }
+}
