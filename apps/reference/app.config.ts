@@ -1,10 +1,7 @@
+import { versionFromEnv } from '@maf/app-version';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
-// Placeholder identifiers. Flavors, real identifiers and tag-derived
-// versions arrive with slice 5 (see docs/adr/0004 and docs/adr/0006).
-const APP_NAME = 'Factory Reference';
-const APP_ID = 'com.example.factory';
-const BRAND_COLOR = '#0F766E';
+import { resolveFlavor } from './config/flavors.ts';
 
 /**
  * The Sentry plugin uploads source maps and debug symbols during a native
@@ -22,27 +19,36 @@ function sentryPlugin(): NonNullable<ExpoConfig['plugins']> {
   ];
 }
 
+/**
+ * One config, two flavors. APP_VARIANT picks the flavor and APP_VERSION,
+ * set by the release workflow to the release tag, decides the version
+ * fields. Neither is ever written into this file: see docs/adr/0004 and
+ * docs/adr/0006.
+ */
 export default function config(_context: ConfigContext): ExpoConfig {
+  const flavor = resolveFlavor(process.env);
+  const version = versionFromEnv(process.env);
+
   return {
-    name: APP_NAME,
+    name: flavor.name,
     slug: 'factory-reference',
-    scheme: 'factoryreference',
-    version: '0.0.0',
+    scheme: flavor.scheme,
+    version: version.version,
     orientation: 'portrait',
     userInterfaceStyle: 'automatic',
-    icon: './assets/brand/public/icon.png',
+    icon: `${flavor.assets}/icon.png`,
     ios: {
-      bundleIdentifier: APP_ID,
-      buildNumber: '1',
+      bundleIdentifier: flavor.appId,
+      buildNumber: version.buildNumber,
       supportsTablet: false,
     },
     android: {
-      package: APP_ID,
-      versionCode: 1,
+      package: flavor.appId,
+      versionCode: version.versionCode,
       adaptiveIcon: {
-        backgroundColor: BRAND_COLOR,
-        foregroundImage: './assets/brand/public/adaptive-foreground.png',
-        monochromeImage: './assets/brand/public/adaptive-monochrome.png',
+        backgroundColor: flavor.brandColor,
+        foregroundImage: `${flavor.assets}/adaptive-foreground.png`,
+        monochromeImage: `${flavor.assets}/adaptive-monochrome.png`,
       },
     },
     plugins: [
@@ -51,8 +57,8 @@ export default function config(_context: ConfigContext): ExpoConfig {
       [
         'expo-splash-screen',
         {
-          backgroundColor: BRAND_COLOR,
-          image: './assets/brand/public/splash-icon.png',
+          backgroundColor: flavor.brandColor,
+          image: `${flavor.assets}/splash-icon.png`,
           imageWidth: 96,
         },
       ],
@@ -61,11 +67,10 @@ export default function config(_context: ConfigContext): ExpoConfig {
       typedRoutes: true,
     },
     extra: {
+      flavor: flavor.flavor,
+      apiBaseUrl: flavor.apiBaseUrl,
       // Both empty by default: with nothing configured the app sends nothing.
-      telemetry: {
-        sentryDsn: process.env.SENTRY_DSN ?? '',
-        otlpEndpoint: process.env.OTLP_ENDPOINT ?? '',
-      },
+      telemetry: flavor.telemetry,
     },
   };
 }

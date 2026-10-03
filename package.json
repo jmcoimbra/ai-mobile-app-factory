@@ -9,7 +9,7 @@
     "factory"
   ],
   "engines": {
-    "node": ">=22.13"
+    "node": ">=24"
   },
   "scripts": {
     "lint": "eslint . && prettier --check .",

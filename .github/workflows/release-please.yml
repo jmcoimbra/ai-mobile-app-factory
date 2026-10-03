@@ -1,0 +1,40 @@
+name: Release pull request
+
+# Keeps one release pull request open with the next version and the
+# changelog built from Conventional Commits. Merging it creates the tag
+# vX.Y.Z, and the tag is what a release build starts from (ADR 0004).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      # Release Please labels its pull requests, which needs issues: write.
+      issues: write
+      actions: write
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      # A pull request opened with the workflow token does not start
+      # workflows, so the required checks would never report on it.
+      # workflow_dispatch is the documented exception: start CI on the
+      # release branch explicitly.
+      - name: Run CI on the release pull request
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          branch=$(printf '%s' "$RELEASE_PR" | jq -r '.headBranchName')
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$branch"
