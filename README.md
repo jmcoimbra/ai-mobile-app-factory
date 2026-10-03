@@ -1,4 +1,4 @@
-# mobile-app-factory
+# ai-mobile-app-factory
 
 An agent-driven factory that takes a feature specification to a tested,
 versioned and store-ready mobile app.
