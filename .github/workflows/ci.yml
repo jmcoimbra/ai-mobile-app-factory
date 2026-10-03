@@ -97,9 +97,12 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          # On a failure, keep what the screen showed and what the device
+          # logged, so a red run can be diagnosed from its artifact.
           script: |
             adb install -r preview/app-release.apk
-            maestro test apps/reference/e2e -e APP_ID=${{ env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug
+            mkdir -p maestro-debug
+            maestro test apps/reference/e2e -e APP_ID=${{ env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug || { adb exec-out screencap -p > maestro-debug/failure.png; adb logcat -d > maestro-debug/logcat.txt; cp -R ~/.maestro/tests maestro-debug/maestro-tests 2>/dev/null; exit 1; }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
