@@ -53,6 +53,15 @@ second build on, the release run does it.
 
 ## 5. The ruleset and the first release
 
+release-please opens its pull request with the workflow token, which a new
+repository does not allow. Turn that on once, keeping the default token
+read-only:
+
+```bash
+printf '{"default_workflow_permissions":"read","can_approve_pull_request_reviews":true}' \
+  | gh api --method PUT repos/<owner>/<repo>/actions/permissions/workflow --input -
+```
+
 ```bash
 tooling/apply-ruleset.sh <owner>/<repo>
 ```
