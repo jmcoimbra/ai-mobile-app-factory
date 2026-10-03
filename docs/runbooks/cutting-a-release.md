@@ -78,6 +78,12 @@ waits for a reviewer in the `store-submission` environment
 npm run factory -w @maf/factory -- release vX.Y.Z --store play --flavor public
 ```
 
+That command is a dry run: it builds, signs with a throwaway key and uploads
+nothing. A real upload needs `FACTORY_ALLOW_STORE_SUBMIT=true` on the
+factory process and the store credentials in the `store-submission`
+environment, as [first-store-submission.md](first-store-submission.md) sets
+up.
+
 ## Removing the manual approval
 
 The approval in step 2 exists because release-please uses `GITHUB_TOKEN`.
