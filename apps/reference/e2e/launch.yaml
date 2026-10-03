@@ -3,4 +3,4 @@ name: 'e2e: app launches and shows the home screen'
 ---
 - launchApp:
     clearState: true
-- assertVisible: 'Factory Reference'
+- assertVisible: 'Daily store checklist'

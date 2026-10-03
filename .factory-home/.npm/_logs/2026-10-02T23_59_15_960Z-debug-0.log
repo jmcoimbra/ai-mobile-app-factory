@@ -1,0 +1,19 @@
+0 verbose cli /Users/juliano/.asdf/installs/nodejs/24.6.0/bin/node /Users/juliano/.asdf/installs/nodejs/24.6.0/bin/npm
+1 info using npm@11.5.1
+2 info using node@v24.6.0
+3 silly config load:file:/Users/juliano/.asdf/installs/nodejs/24.6.0/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/juliano/Development/.worktrees/maf-s7/.factory/workspaces/daily-checklist-202610022336/.npmrc
+5 silly config load:file:/Users/juliano/Development/.worktrees/maf-s7/.factory/workspaces/daily-checklist-202610022336/.factory-home/.npmrc
+6 silly config load:file:/Users/juliano/.asdf/installs/nodejs/24.6.0/etc/npmrc
+7 verbose title npm run lint
+8 verbose argv "run" "lint" "--"
+9 verbose logfile logs-max:10 dir:/Users/juliano/Development/.worktrees/maf-s7/.factory/workspaces/daily-checklist-202610022336/.factory-home/.npm/_logs/2026-10-02T23_59_15_960Z-
+10 verbose logfile /Users/juliano/Development/.worktrees/maf-s7/.factory/workspaces/daily-checklist-202610022336/.factory-home/.npm/_logs/2026-10-02T23_59_15_960Z-debug-0.log
+11 silly logfile start cleaning logs, removing 1 files
+12 silly logfile done cleaning log files
+13 verbose cwd /Users/juliano/Development/.worktrees/maf-s7/.factory/workspaces/daily-checklist-202610022336
+14 verbose os Darwin 27.0.0
+15 verbose node v24.6.0
+16 verbose npm  v11.5.1
+17 verbose exit 0
+18 info ok
