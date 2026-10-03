@@ -1,0 +1,27 @@
+{
+  "name": "@maf/factory",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "factory": "src/cli.ts"
+  },
+  "scripts": {
+    "factory": "node src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^1.0.0",
+    "@langchain/core": "^1.2.14",
+    "@langchain/langgraph": "^1.4.18",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
+    "@maf/app-version": "*",
+    "langchain": "^1.5.15",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "~6.0.3"
+  }
+}
