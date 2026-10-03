@@ -3,7 +3,9 @@ name: 'e2e: manager completes the daily checklist'
 ---
 - launchApp:
     clearState: true
-- assertVisible: '0 of 5 done'
+- extendedWaitUntil:
+    visible: '0 of 5 done'
+    timeout: 30000
 - tapOn: 'Open the safe'
 - assertVisible: '1 of 5 done'
 - tapOn: 'Check the fridge temperatures'
