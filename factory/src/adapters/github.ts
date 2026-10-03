@@ -80,15 +80,24 @@ export function createGitHub(options: GitHubOptions) {
     async awaitChecks(pullRequest: PullRequest): Promise<{ ok: boolean; failures: string[] }> {
       const started = Date.now();
       while (true) {
-        const json = await gh([
-          'pr',
-          'checks',
-          String(pullRequest.number),
-          '--repo',
-          repo,
-          '--json',
-          'name,state,bucket',
-        ]);
+        // Right after the push, gh exits non-zero with "no checks reported":
+        // the checks have not started yet, which is the same as pending.
+        let json = '[]';
+        try {
+          json = await gh([
+            'pr',
+            'checks',
+            String(pullRequest.number),
+            '--repo',
+            repo,
+            '--json',
+            'name,state,bucket',
+          ]);
+        } catch (error) {
+          if (!/no checks reported/.test(error instanceof Error ? error.message : String(error))) {
+            throw error;
+          }
+        }
         const checks = JSON.parse(json) as { name: string; state: string; bucket: string }[];
         const pending = checks.filter((check) => check.bucket === 'pending');
         if (checks.length > 0 && pending.length === 0) {
