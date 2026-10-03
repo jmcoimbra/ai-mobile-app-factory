@@ -219,9 +219,11 @@ by the factory.
   live in a password manager or in GitHub environment secrets. Only
   `.env.example` is versioned.
 - **Store credentials are released only inside the protected environment**,
-  after a required reviewer approves the job. The job that holds them runs
-  no code from the repository: it downloads a built artifact, signs it and
-  uploads it. The jobs that run repository code (install, prebuild, compile)
+  after a required reviewer approves the job. The job that holds them
+  downloads a built artifact, signs it and uploads it. The only repository
+  code it runs is the lanes under `fastlane/` and their pinned Gemfile, both
+  protected paths that only a person changes; it installs no npm dependency
+  and evaluates no app config. The jobs that do (install, prebuild, compile)
   hold no store credential.
 - A release builds only from a tag on `main`, and `main` only takes
   reviewed pull requests with green checks.

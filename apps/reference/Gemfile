@@ -1,0 +1,7 @@
+source "https://rubygems.org"
+
+gem "fastlane", "~> 2.240"
+
+# 3.0.9 declares ruby < 3.2 and 4.0 needs ruby >= 3.2; 3.0.8 runs on both,
+# so the lockfile resolves the same on any Ruby the project supports.
+gem "CFPropertyList", "3.0.8"

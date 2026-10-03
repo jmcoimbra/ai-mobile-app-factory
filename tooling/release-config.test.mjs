@@ -20,6 +20,11 @@ test('release configuration builds the changelog from conventional commits', () 
   assert.equal(config.packages['.']['changelog-path'], 'CHANGELOG.md');
 });
 
+test('the first release is 0.1.0, since nothing has shipped to a store yet', () => {
+  assert.equal(config.packages['.']['initial-version'], '0.1.0');
+  assert.equal(deriveVersion(`v${config.packages['.']['initial-version']}`).versionCode, 1000);
+});
+
 test('the tags release-please creates are tags the build accepts', () => {
   // One version for the whole repository, tagged vX.Y.Z with no component.
   assert.deepEqual(Object.keys(config.packages), ['.']);
