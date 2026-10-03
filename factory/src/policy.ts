@@ -83,11 +83,12 @@ export function childEnvironment(
 }
 
 /**
- * The scratch HOME of a workspace: a sibling tree, never inside the
+ * The scratch HOME of a workspace: a sibling directory, never inside the
  * workspace, so nothing a script writes there (npm cache, config) can end
- * up in a diff or a commit. `.factory/workspaces/<id>` gets
- * `.factory/homes/<id>`.
+ * up in a diff or a commit. `<dir>/<id>` gets `<dir>/<id>.home`, which is
+ * creatable wherever the workspace was.
  */
 export function scratchHome(workspacePath: string): string {
-  return resolve(workspacePath, '..', '..', 'homes', basename(workspacePath));
+  const absolute = resolve(workspacePath);
+  return resolve(dirname(absolute), `${basename(absolute)}.home`);
 }
