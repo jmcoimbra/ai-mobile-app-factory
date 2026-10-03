@@ -1,4 +1,4 @@
-import { delimiter, dirname } from 'node:path';
+import { basename, delimiter, dirname, resolve } from 'node:path';
 
 /**
  * What the agent may not do, in one place. The file tools enforce these
@@ -80,7 +80,12 @@ export function childEnvironment(
   return env;
 }
 
-/** The scratch HOME of a workspace. Created on demand by the command runner. */
+/**
+ * The scratch HOME of a workspace: a sibling tree, never inside the
+ * workspace, so nothing a script writes there (npm cache, config) can end
+ * up in a diff or a commit. `.factory/workspaces/<id>` gets
+ * `.factory/homes/<id>`.
+ */
 export function scratchHome(workspacePath: string): string {
-  return `${workspacePath}/.factory-home`;
+  return resolve(workspacePath, '..', '..', 'homes', basename(workspacePath));
 }

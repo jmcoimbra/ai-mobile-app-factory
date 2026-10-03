@@ -84,6 +84,11 @@ export function createGitWorkspaces(repoRoot: string, baseBranch = 'main') {
 
     /** Commits whatever changed and pushes the branch. Nothing to commit is fine. */
     async commitAndPush(workspace: Workspace, message: string): Promise<void> {
+      try {
+        await git(workspace.path, 'reset', '-q', '--', '.factory-home');
+      } catch {
+        // Nothing was there.
+      }
       await git(workspace.path, 'add', '--all');
       const staged = await git(workspace.path, 'diff', '--cached', '--name-only');
       if (staged.length > 0) await git(workspace.path, 'commit', '--quiet', '-m', message);

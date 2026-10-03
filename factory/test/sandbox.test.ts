@@ -125,7 +125,9 @@ describe('command runner', () => {
   test('code run from the workspace gets a scratch HOME, never the real one', async () => {
     const { root } = await workspace();
     const env = childEnvironment({ PATH: '/usr/bin', HOME: '/home/x' }, scratchHome(root));
-    assert.equal(env.HOME, join(root, '.factory-home'));
+    // The scratch home is a sibling tree, outside the workspace.
+    assert.equal(env.HOME, join(root, '..', '..', 'homes', 'repo'));
+    assert.ok(!env.HOME.startsWith(root + '/'));
     assert.ok(isProtectedPath('.factory-home/.npmrc'));
     assert.ok(isProtectedPath('.factory/test-results.json'));
   });
