@@ -66,8 +66,10 @@ printf '{"default_workflow_permissions":"read","can_approve_pull_request_reviews
 tooling/apply-ruleset.sh <owner>/<repo>
 ```
 
-Then merge the release pull request that release-please keeps open. Its
-merge creates the tag. Start the release run from that tag:
+Then merge the release pull request that release-please keeps open, after
+approving its CI runs: GitHub holds them, as
+[cutting-a-release.md](cutting-a-release.md) explains. Its merge creates the
+tag. Start the release run from that tag:
 
 ```bash
 npm run factory -w @maf/factory -- release v0.1.0 --store play --flavor public

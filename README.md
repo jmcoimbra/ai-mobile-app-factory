@@ -150,7 +150,9 @@ throwaway key, and uploads nothing.
 [ADR 0006](docs/adr/0006-distribution-paths.md) compares the official
 distribution paths, citing the vendor page read for each claim, and
 [the runbook](docs/runbooks/first-store-submission.md) covers the first real
-submission.
+submission. Every release after the first follows
+[the release runbook](docs/runbooks/cutting-a-release.md), including the CI
+approval GitHub asks for on release pull requests.
 
 ## Quality gates
 
