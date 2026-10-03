@@ -3,4 +3,8 @@ name: 'e2e: app launches and shows the home screen'
 ---
 - launchApp:
     clearState: true
-- assertVisible: 'Factory Reference'
+# A release build's first cold start on a CI emulator can outlast the
+# default seven-second wait of assertVisible.
+- extendedWaitUntil:
+    visible: 'Factory Reference'
+    timeout: 30000
