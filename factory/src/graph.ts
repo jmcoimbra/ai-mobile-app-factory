@@ -195,12 +195,27 @@ export function buildFactoryGraph(
         kind: 'approve_merge',
         spec: state.spec!.id,
         pullRequest: state.pullRequest!.url,
-        instruction: 'Review and merge the pull request yourself, then resume.',
+        instruction:
+          'Review and merge the pull request yourself, then resume with approve. To ask for changes, resume with reject and a note: the note goes back to the agent and the fix lands on the same pull request.',
       },
       { responseSchema: Approval },
     );
     const mergeApproval = Approval.parse(answer);
-    return { mergeApproval, log: [`merge decision recorded by ${mergeApproval.by}`] };
+    const changesRequested = !mergeApproval.approved && mergeApproval.note.trim().length > 0;
+    return {
+      mergeApproval,
+      ...(changesRequested
+        ? {
+            attempts: 0,
+            feedback: [`changes requested by ${mergeApproval.by}: ${mergeApproval.note}`],
+          }
+        : {}),
+      log: [
+        changesRequested
+          ? `changes requested by ${mergeApproval.by}`
+          : `merge decision recorded by ${mergeApproval.by}`,
+      ],
+    };
   }
 
   // ---- Release run -------------------------------------------------------
@@ -408,7 +423,14 @@ export function buildFactoryGraph(
         (state: State) => (state.ciPassed ? 'approve_merge' : retryOrEscalate(state)),
         ['approve_merge', 'implement', 'escalate'],
       )
-      .addEdge('approve_merge', 'report')
+      .addConditionalEdges(
+        'approve_merge',
+        (state: State) =>
+          state.mergeApproval?.approved === false && state.mergeApproval.note.trim().length > 0
+            ? 'implement'
+            : 'report',
+        ['implement', 'report'],
+      )
 
       .addConditionalEdges(
         'load_release',
