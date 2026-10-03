@@ -1,21 +1,32 @@
 import { runChecks } from './adapters/checks.ts';
 import { createGitWorkspaces } from './adapters/git-workspace.ts';
 import { createGitHub } from './adapters/github.ts';
+import { createClaudeCodeAdapters } from './adapters/claude-code.ts';
 import { createModelAdapters } from './adapters/models.ts';
 import type { FactoryDeps, Workspace } from './ports.ts';
 import { loadSpec, type FeatureSpec } from './spec.ts';
 
+export type Backend = 'langchain' | 'claude-code';
+
 export interface DepsOptions {
   repoRoot: string;
   repo: string;
+  /** Which agent runs plan, implement and review. */
+  backend?: Backend;
   model?: string;
+  /** The branch workspaces are cut from and pull requests target. */
+  baseBranch?: string;
 }
 
 /** The real adapters, wired together for the CLI. */
 export function createDeps(options: DepsOptions): FactoryDeps {
-  const workspaces = createGitWorkspaces(options.repoRoot);
-  const github = createGitHub({ repo: options.repo });
-  const models = createModelAdapters({ model: options.model });
+  const baseBranch = options.baseBranch ?? 'main';
+  const workspaces = createGitWorkspaces(options.repoRoot, baseBranch);
+  const github = createGitHub({ repo: options.repo, baseBranch });
+  const models =
+    options.backend === 'claude-code'
+      ? createClaudeCodeAdapters({ model: options.model })
+      : createModelAdapters({ model: options.model });
 
   return {
     loadSpec,

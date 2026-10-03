@@ -16,6 +16,10 @@ export interface GitHubOptions {
   repo: string;
   /** Workflow file the release runs come from. */
   releaseWorkflow?: string;
+  /** Workflow file whose run decides whether a pull request is green. */
+  ciWorkflow?: string;
+  /** The branch pull requests target. */
+  baseBranch?: string;
   pollIntervalMs?: number;
   maxWaitMs?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -27,6 +31,8 @@ export function createGitHub(options: GitHubOptions) {
   const {
     repo,
     releaseWorkflow = 'release.yml',
+    ciWorkflow = 'ci.yml',
+    baseBranch = 'main',
     pollIntervalMs = 60_000,
     maxWaitMs = 90 * 60_000,
     sleep = defaultSleep,
@@ -61,7 +67,7 @@ export function createGitHub(options: GitHubOptions) {
           '--head',
           input.branch,
           '--base',
-          'main',
+          baseBranch,
           '--title',
           input.title,
           '--body',
@@ -73,32 +79,68 @@ export function createGitHub(options: GitHubOptions) {
       return { url, number };
     },
 
-    /** Polls the checks until every one finished, or the wait runs out. */
+    /**
+     * Waits for the CI workflow run on the pull request's current head
+     * commit and returns its verdict. Reading `gh pr checks` right after a
+     * push returns the previous commit's checks; asking by commit does not.
+     */
     async awaitChecks(pullRequest: PullRequest): Promise<{ ok: boolean; failures: string[] }> {
       const started = Date.now();
+      const head = await gh([
+        'pr',
+        'view',
+        String(pullRequest.number),
+        '--repo',
+        repo,
+        '--json',
+        'headRefOid',
+        '--jq',
+        '.headRefOid',
+      ]);
       while (true) {
-        const json = await gh([
-          'pr',
-          'checks',
-          String(pullRequest.number),
-          '--repo',
-          repo,
-          '--json',
-          'name,state,bucket',
-        ]);
-        const checks = JSON.parse(json) as { name: string; state: string; bucket: string }[];
-        const pending = checks.filter((check) => check.bucket === 'pending');
-        if (checks.length > 0 && pending.length === 0) {
-          // Only a pass counts. A cancelled or skipped check is not green.
-          const failures = checks
-            .filter((check) => check.bucket !== 'pass')
-            .map((check) => `${check.name} (${check.bucket})`);
-          return { ok: failures.length === 0, failures };
+        const runs = JSON.parse(
+          await gh([
+            'run',
+            'list',
+            '--repo',
+            repo,
+            '--workflow',
+            ciWorkflow,
+            '--commit',
+            head,
+            '--json',
+            'databaseId,status,conclusion,createdAt',
+            '--limit',
+            '20',
+          ]),
+        ) as CiRun[];
+        const verdict = judgeCiRuns(runs);
+        if (verdict.state === 'done') {
+          if (verdict.ok) return { ok: true, failures: [] };
+          const jobs = JSON.parse(
+            await gh([
+              'run',
+              'view',
+              String(verdict.runId),
+              '--repo',
+              repo,
+              '--json',
+              'jobs',
+              '--jq',
+              '.jobs',
+            ]),
+          ) as { name: string; conclusion: string | null }[];
+          const failures = jobs
+            .filter((job) => job.conclusion !== 'success' && job.conclusion !== 'skipped')
+            .map((job) => `${job.name} (${job.conclusion ?? 'unknown'})`);
+          return { ok: false, failures: failures.length > 0 ? failures : ['the CI run failed'] };
         }
         if (Date.now() - started > maxWaitMs) {
           return {
             ok: false,
-            failures: [`checks still pending after ${Math.round(maxWaitMs / 60_000)} minutes`],
+            failures: [
+              `no finished CI run on ${head.slice(0, 7)} after ${Math.round(maxWaitMs / 60_000)} minutes`,
+            ],
           };
         }
         await sleep(pollIntervalMs);
@@ -176,6 +218,32 @@ export function createGitHub(options: GitHubOptions) {
       };
     },
   };
+}
+
+export interface CiRun {
+  databaseId: number;
+  status: string;
+  conclusion: string | null;
+  createdAt: string;
+}
+
+/**
+ * The verdict on the CI runs of one commit. Pending while any run is in
+ * flight or none has finished; otherwise the newest run that was not
+ * cancelled decides. A duplicate run cancelled by the concurrency group
+ * never counts.
+ */
+export function judgeCiRuns(
+  runs: readonly CiRun[],
+): { state: 'pending' } | { state: 'done'; runId: number; ok: boolean } {
+  if (runs.length === 0 || runs.some((run) => run.status !== 'completed'))
+    return { state: 'pending' };
+  const decisive = runs
+    .filter((run) => run.conclusion !== 'cancelled')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const latest = decisive[0];
+  if (!latest) return { state: 'pending' };
+  return { state: 'done', runId: latest.databaseId, ok: latest.conclusion === 'success' };
 }
 
 /** The `run-name` the release workflow gives itself, so a run can be found again. */

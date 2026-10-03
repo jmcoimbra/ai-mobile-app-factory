@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, test } from 'node:test';
 
 import { createCommandRunner, CommandError } from '../src/adapters/command-runner.ts';
@@ -65,6 +65,10 @@ describe('sandbox', () => {
       '.env',
       'apps/reference/.env.local',
       'release-please-config.json',
+      '.claude/settings.json',
+      'apps/reference/.claude/settings.local.json',
+      'CLAUDE.local.md',
+      '.mcp.json',
     ]) {
       assert.ok(isProtectedPath(path), `${path} is not protected`);
       await assert.rejects(sandbox.write(path, 'x'), /protected/, `write to ${path} was allowed`);
@@ -118,12 +122,16 @@ describe('command runner', () => {
       'PATH',
       'npm_config_update_notifier',
     ]);
+    // The running node comes first, ahead of any version-manager shim.
+    assert.ok(env.PATH?.startsWith(dirname(process.execPath)), env.PATH);
   });
 
   test('code run from the workspace gets a scratch HOME, never the real one', async () => {
     const { root } = await workspace();
     const env = childEnvironment({ PATH: '/usr/bin', HOME: '/home/x' }, scratchHome(root));
-    assert.equal(env.HOME, join(root, '.factory-home'));
+    // The scratch home is a sibling tree, outside the workspace.
+    assert.equal(env.HOME, `${root}.home`);
+    assert.ok(!env.HOME.startsWith(root + '/'));
     assert.ok(isProtectedPath('.factory-home/.npmrc'));
     assert.ok(isProtectedPath('.factory/test-results.json'));
   });

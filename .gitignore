@@ -34,8 +34,9 @@ coverage/
 *.orig.*
 .kotlin/
 
-# factory runtime state (checkpoints, workspaces)
+# factory runtime state (checkpoints, workspaces, the scratch home of its scripts)
 .factory/
+.factory-home/
 
 # fastlane output
 fastlane/report.xml

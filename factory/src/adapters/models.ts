@@ -6,6 +6,7 @@ import { ALLOWED_SCRIPTS, isProtectedPath } from '../policy.ts';
 import type { Diff, ImplementContext, ReviewResult } from '../ports.ts';
 import type { FeatureSpec } from '../spec.ts';
 import { createCommandRunner } from './command-runner.ts';
+import { REPOSITORY_RULES, REVIEW_RULES } from './prompts.ts';
 import { Sandbox } from './sandbox.ts';
 
 /** Provider and model in LangChain's `provider:model` form. */
@@ -28,13 +29,6 @@ function textOf(content: unknown): string {
   }
   return '';
 }
-
-const REPOSITORY_RULES = `Rules of this repository:
-- Every acceptance criterion is the exact name of a test. Write each test with that name, character for character.
-- Unit and component tests run with Jest in apps/reference and with node:test in packages/. A criterion whose name starts with "e2e:" is a Maestro flow in apps/reference/e2e whose "name:" is that exact string.
-- User-facing error text comes from the message catalog in packages/error-contract. Telemetry goes through packages/telemetry. Colours and spacing come from packages/design-tokens.
-- Never touch package manifests, lockfiles, app.config.ts, config plugins, workflows, fastlane or the factory. Those paths are protected and the write tool refuses them.
-- Run "lint", "typecheck" and "test" before finishing, and fix what they report. Run "format" to apply Prettier.`;
 
 export function createModelAdapters(options: ModelOptions = {}) {
   const modelName = options.model ?? process.env.FACTORY_MODEL ?? DEFAULT_MODEL;
@@ -125,9 +119,7 @@ export function createModelAdapters(options: ModelOptions = {}) {
       const response = await (
         await model()
       ).invoke([
-        new SystemMessage(
-          `You review a diff against a feature spec and these rules:\n- Every acceptance criterion has a test with its exact name, and the test checks the behaviour the criterion describes rather than restating it.\n- No technical detail reaches the user interface; messages come from the catalog.\n- No personal data goes into telemetry attributes or messages.\n- No secret, token or credential in the code.\n- No change to a protected path.\n- No code that runs at build or install time (scripts, config plugins, dependencies).\n\nAnswer with one JSON object in a \`\`\`json block: {"ok": boolean, "findings": string[]}. "ok" is false when any finding blocks the merge. Keep findings specific: file, line, what is wrong.`,
-        ),
+        new SystemMessage(REVIEW_RULES),
         new HumanMessage(
           `Spec:\n\n${input.spec.body}\n\nFiles changed:\n${input.diff.files.join('\n')}\n\nProtected files in the diff: ${protectedFiles.join(', ') || 'none'}\n\nDiff:\n\n${input.diff.patch.slice(0, 200_000)}`,
         ),
@@ -142,17 +134,19 @@ export function parseReview(text: string): ReviewResult {
   const block = /```json\s*([\s\S]*?)```/.exec(text)?.[1] ?? text;
   try {
     const parsed = z
-      .object({ ok: z.boolean(), findings: z.array(z.string()).default([]) })
+      .object({
+        ok: z.boolean(),
+        findings: z.array(z.string()).default([]),
+        notes: z.array(z.string()).default([]),
+      })
       .parse(JSON.parse(block.trim()));
-    return parsed.ok && parsed.findings.length === 0
-      ? { ok: true, findings: [] }
-      : {
-          ok: false,
-          findings:
-            parsed.findings.length > 0
-              ? parsed.findings
-              : ['the reviewer blocked the change without a finding'],
-        };
+    // Only findings block. A reviewer that says "not ok" without naming a
+    // finding is asked again through one.
+    if (parsed.findings.length > 0) return { ok: false, findings: parsed.findings };
+    if (!parsed.ok) {
+      return { ok: false, findings: ['the reviewer blocked the change without a finding'] };
+    }
+    return { ok: true, findings: [] };
   } catch {
     return {
       ok: false,

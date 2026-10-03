@@ -27,6 +27,13 @@ Needs: Node 24, `git` and `gh` logged in, and a model. The model is
 and its API key in the environment of the factory process. The agent's own
 processes never see that environment: see `src/policy.ts`.
 
+## Where to run it
+
+In a disposable VM or container that holds no credential but the factory's
+own. The tests the agent writes execute as your user: the factory keeps
+your tokens out of their environment, but it cannot stop code from reading
+a file your user can read.
+
 ## What it will not do
 
 - Merge a pull request. A person does, after reading it.

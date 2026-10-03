@@ -16,6 +16,14 @@ export class ApprovalGuardError extends Error {
 
 const CHECK_SCRIPTS: readonly AllowedScript[] = ['lint', 'typecheck', 'test:report'];
 
+/** The most feedback one attempt is handed. A flood hides the real problem. */
+const MAX_FEEDBACK_LINES = 40;
+
+function capped(lines: string[]): string[] {
+  if (lines.length <= MAX_FEEDBACK_LINES) return lines;
+  return [...lines.slice(0, MAX_FEEDBACK_LINES), `and ${lines.length - MAX_FEEDBACK_LINES} more`];
+}
+
 function describe(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
@@ -115,7 +123,7 @@ export function buildFactoryGraph(
     const verified = failures.length === 0 && checks.ok;
     return {
       verified,
-      feedback: failures,
+      feedback: capped(failures),
       log: [verified ? 'verify passed' : `verify failed: ${failures.length} problem(s)`],
     };
   }
@@ -145,8 +153,16 @@ export function buildFactoryGraph(
     const escalation = EscalationDecision.parse(answer);
     return {
       escalation,
-      // A retry gets a fresh set of attempts and keeps the feedback.
-      ...(escalation.action === 'retry' ? { attempts: 0 } : { outcome: 'aborted' as const }),
+      // A retry gets a fresh set of attempts. The person's note replaces the
+      // feedback when there is one: it says what the checks could not.
+      ...(escalation.action === 'retry'
+        ? {
+            attempts: 0,
+            feedback: escalation.note
+              ? [`from the person who reviewed: ${escalation.note}`]
+              : state.feedback,
+          }
+        : { outcome: 'aborted' as const }),
       log: [`escalation answered "${escalation.action}" by ${escalation.by}`],
     };
   }
@@ -179,12 +195,27 @@ export function buildFactoryGraph(
         kind: 'approve_merge',
         spec: state.spec!.id,
         pullRequest: state.pullRequest!.url,
-        instruction: 'Review and merge the pull request yourself, then resume.',
+        instruction:
+          'Review and merge the pull request yourself, then resume with approve. To ask for changes, resume with reject and a note: the note goes back to the agent and the fix lands on the same pull request.',
       },
       { responseSchema: Approval },
     );
     const mergeApproval = Approval.parse(answer);
-    return { mergeApproval, log: [`merge decision recorded by ${mergeApproval.by}`] };
+    const changesRequested = !mergeApproval.approved && mergeApproval.note.trim().length > 0;
+    return {
+      mergeApproval,
+      ...(changesRequested
+        ? {
+            attempts: 0,
+            feedback: [`changes requested by ${mergeApproval.by}: ${mergeApproval.note}`],
+          }
+        : {}),
+      log: [
+        changesRequested
+          ? `changes requested by ${mergeApproval.by}`
+          : `merge decision recorded by ${mergeApproval.by}`,
+      ],
+    };
   }
 
   // ---- Release run -------------------------------------------------------
@@ -392,7 +423,14 @@ export function buildFactoryGraph(
         (state: State) => (state.ciPassed ? 'approve_merge' : retryOrEscalate(state)),
         ['approve_merge', 'implement', 'escalate'],
       )
-      .addEdge('approve_merge', 'report')
+      .addConditionalEdges(
+        'approve_merge',
+        (state: State) =>
+          state.mergeApproval?.approved === false && state.mergeApproval.note.trim().length > 0
+            ? 'implement'
+            : 'report',
+        ['implement', 'report'],
+      )
 
       .addConditionalEdges(
         'load_release',
