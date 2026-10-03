@@ -65,6 +65,10 @@ describe('sandbox', () => {
       '.env',
       'apps/reference/.env.local',
       'release-please-config.json',
+      '.claude/settings.json',
+      'apps/reference/.claude/settings.local.json',
+      'CLAUDE.local.md',
+      '.mcp.json',
     ]) {
       assert.ok(isProtectedPath(path), `${path} is not protected`);
       await assert.rejects(sandbox.write(path, 'x'), /protected/, `write to ${path} was allowed`);
@@ -126,7 +130,7 @@ describe('command runner', () => {
     const { root } = await workspace();
     const env = childEnvironment({ PATH: '/usr/bin', HOME: '/home/x' }, scratchHome(root));
     // The scratch home is a sibling tree, outside the workspace.
-    assert.equal(env.HOME, join(root, '..', '..', 'homes', 'repo'));
+    assert.equal(env.HOME, `${root}.home`);
     assert.ok(!env.HOME.startsWith(root + '/'));
     assert.ok(isProtectedPath('.factory-home/.npmrc'));
     assert.ok(isProtectedPath('.factory/test-results.json'));

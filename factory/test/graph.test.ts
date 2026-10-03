@@ -197,6 +197,41 @@ describe('feature run', () => {
     assert.equal(calls.implement.length, 3);
   });
 
+  test('changes requested at the merge go back to the agent and land on the same pull request', async () => {
+    const { graph, calls } = start();
+    await graph.invoke({ request: feature });
+    await graph.invoke(approve());
+
+    const result = await graph.invoke(
+      new Command({
+        resume: {
+          approved: false,
+          by: 'maintainer',
+          note: 'the rollover test does not fire the timer',
+        },
+      }),
+    );
+
+    assert.equal(calls.implement.length, 2);
+    assert.deepEqual(calls.implement[1]?.feedback, [
+      'changes requested by maintainer: the rollover test does not fire the timer',
+    ]);
+    assert.equal(calls.openPullRequest, 1);
+    assert.equal(calls.pushUpdate, 1);
+    assert.equal(interruptKind(result), 'approve_merge', 'the person is asked again');
+  });
+
+  test('a rejected merge with no note ends the run', async () => {
+    const { graph, calls } = start();
+    await graph.invoke({ request: feature });
+    await graph.invoke(approve());
+
+    const result = await graph.invoke(reject());
+
+    assert.equal(calls.implement.length, 1);
+    assert.equal(result.__interrupt__, undefined);
+  });
+
   test('a fix after a red CI is pushed and the merge is asked for', async () => {
     const { graph, calls } = start({ ciOk: (attempt) => attempt >= 2 });
     await graph.invoke({ request: feature });

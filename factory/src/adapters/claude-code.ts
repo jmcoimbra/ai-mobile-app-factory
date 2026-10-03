@@ -97,6 +97,9 @@ export function createClaudeCodeAdapters(options: ClaudeCodeOptions = {}) {
           '--max-turns',
           String(maxTurns),
           // No built-in tool: everything goes through the factory's server.
+          // --restricted also ignores user, project and local settings files,
+          // so a hook or plugin the agent writes into the workspace never runs.
+          '--restricted',
           '--tools',
           '',
           '--mcp-config',

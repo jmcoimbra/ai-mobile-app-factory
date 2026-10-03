@@ -63,6 +63,7 @@ describe('claude code backend', () => {
     const args = JSON.parse(await readFile(stub.argsFile, 'utf8')) as string[];
     const value = (flag: string) => args[args.indexOf(flag) + 1] ?? '';
     assert.equal(value('--tools'), '');
+    assert.ok(args.includes('--restricted'), 'project hooks and plugins must not load');
     assert.ok(args.includes('--strict-mcp-config'));
     assert.equal(value('--allowedTools'), 'mcp__factory');
     assert.equal(value('--permission-mode'), 'dontAsk');
