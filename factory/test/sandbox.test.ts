@@ -65,6 +65,10 @@ describe('sandbox', () => {
       '.env',
       'apps/reference/.env.local',
       'release-please-config.json',
+      '.claude/settings.json',
+      'apps/reference/.claude/settings.local.json',
+      'CLAUDE.local.md',
+      '.mcp.json',
     ]) {
       assert.ok(isProtectedPath(path), `${path} is not protected`);
       await assert.rejects(sandbox.write(path, 'x'), /protected/, `write to ${path} was allowed`);

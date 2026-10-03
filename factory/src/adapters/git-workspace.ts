@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { childEnvironment, scratchHome } from '../policy.ts';
+import { childEnvironment, isProtectedPath, scratchHome } from '../policy.ts';
 import type { Diff, Workspace } from '../ports.ts';
 import type { FeatureSpec } from '../spec.ts';
 
@@ -16,6 +16,16 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
     maxBuffer: 64 * 1024 * 1024,
   });
   return stdout.trim();
+}
+
+export class ProtectedPathError extends Error {
+  readonly paths: string[];
+
+  constructor(paths: string[]) {
+    super(`refusing to commit protected paths: ${paths.join(', ')}`);
+    this.paths = paths;
+    this.name = 'ProtectedPathError';
+  }
 }
 
 /**
@@ -91,6 +101,13 @@ export function createGitWorkspaces(repoRoot: string, baseBranch = 'main') {
       }
       await git(workspace.path, 'add', '--all');
       const staged = await git(workspace.path, 'diff', '--cached', '--name-only');
+      // Checked again here, on what is about to be committed: a test run
+      // after verify could have written a protected file.
+      const blocked = staged.split('\n').filter(Boolean).filter(isProtectedPath);
+      if (blocked.length > 0) {
+        await git(workspace.path, 'reset', '-q');
+        throw new ProtectedPathError(blocked);
+      }
       if (staged.length > 0) await git(workspace.path, 'commit', '--quiet', '-m', message);
       await git(workspace.path, 'push', '--quiet', '-u', 'origin', workspace.branch);
     },

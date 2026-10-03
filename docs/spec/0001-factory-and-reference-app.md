@@ -235,6 +235,15 @@ by the factory.
 - The message a user sees comes from a catalog keyed by error code. The
   technical detail never reaches the screen.
 - The factory treats model output as untrusted, as listed under the graph.
+- **The tests the agent writes run on the host, as the operator's user.**
+  The scratch HOME and the minimal environment keep tokens out of their
+  reach, and the allowlist limits which scripts start, but neither is a
+  sandbox: a test can read or write any path the user can. Run the
+  factory inside a disposable VM or container with no credentials but its
+  own, and give the agent's checks no network beyond the package registry.
+- Protected paths are checked three times: by the write tool, by `verify`
+  on the diff, and on the staged files right before the commit, because
+  tests run between the second check and the commit.
 - The corporate flavor has its own bundle identifier, signing identity and
   keys. A build of one flavor cannot be submitted as the other.
 
