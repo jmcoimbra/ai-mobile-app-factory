@@ -39,6 +39,11 @@ export function ChecklistScreen({ api, now = systemClock }: ChecklistScreenProps
   const mounted = useRef(true);
   const clock = useRef(now);
   const [day, setDay] = useState(() => dayKey(now()));
+  // The day on screen, updated as soon as a new day starts, so a load or save
+  // that began on a previous day can tell that its result is stale.
+  const currentDay = useRef(day);
+  // Only the most recent load may fill the screen.
+  const loadSeq = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -51,9 +56,16 @@ export function ChecklistScreen({ api, now = systemClock }: ChecklistScreenProps
     clock.current = now;
   }, [now]);
 
+  /** True when work begun on `forDay` may still change the screen. */
+  const isCurrent = useCallback(
+    (forDay: string) => mounted.current && currentDay.current === forDay,
+    [],
+  );
+
   // Drop the previous day's list before loading the new one, so a load that
   // fails on the new day shows no task as done and offers to try again.
   const startDay = useCallback((next: string) => {
+    currentDay.current = next;
     latest.current = [];
     setTasks(null);
     setError(null);
@@ -87,64 +99,66 @@ export function ChecklistScreen({ api, now = systemClock }: ChecklistScreenProps
     setTasks(loaded);
   }, []);
 
-  useEffect(() => {
-    let active = true;
+  const runLoad = useCallback(() => {
+    const forDay = day;
+    loadSeq.current += 1;
+    const seq = loadSeq.current;
+    const stillWanted = () => isCurrent(forDay) && loadSeq.current === seq;
     load().then(
       (loaded) => {
-        if (active) show(loaded);
+        if (stillWanted()) show(loaded);
       },
       (thrown: unknown) => {
-        if (active) setError(toAppError(thrown).code);
+        if (stillWanted()) setError(toAppError(thrown).code);
       },
     );
-    return () => {
-      active = false;
-    };
-  }, [load, show]);
+  }, [day, isCurrent, load, show]);
+
+  useEffect(() => {
+    runLoad();
+  }, [runLoad]);
 
   const retryLoad = useCallback(() => {
     setError(null);
-    load().then(
-      (loaded) => {
-        if (mounted.current) show(loaded);
-      },
-      (thrown: unknown) => {
-        if (mounted.current) setError(toAppError(thrown).code);
-      },
-    );
-  }, [load, show]);
+    runLoad();
+  }, [runLoad]);
 
   const toggle = useCallback(
     (id: string) => {
+      const forDay = day;
       const run = async () => {
+        // A toggle queued on a day that has since ended does nothing.
+        if (!isCurrent(forDay)) return;
         const today = dayKey(clock.current());
-        if (today !== day) {
+        if (today !== forDay) {
           // The list on screen belongs to a day that has ended. Load today's
           // list instead of writing to yesterday's entry.
-          if (mounted.current) startDay(today);
+          startDay(today);
           return;
         }
         const current = latest.current.find((task) => task.id === id);
         if (!current) return;
         const updated = { ...current, done: !current.done };
         const next = latest.current.map((task) => (task.id === id ? updated : task));
-        if (mounted.current) setError(null);
+        setError(null);
         try {
           await api.save(updated);
           // Store first, so the screen never shows a state a reload would lose.
           await saveCompletion(
-            day,
+            forDay,
             next.filter((task) => task.done).map((task) => task.id),
           );
-          if (mounted.current) show(next);
+          // A save that finishes after the day changed must not bring back
+          // yesterday's list or hide the new day's error.
+          if (isCurrent(forDay)) show(next);
         } catch (thrown) {
-          if (mounted.current) setError(toAppError(thrown).code);
+          if (isCurrent(forDay)) setError(toAppError(thrown).code);
         }
       };
       queue.current = queue.current.then(run);
       return queue.current;
     },
-    [api, day, show, startDay],
+    [api, day, isCurrent, show, startDay],
   );
 
   const message = error ? userMessageFor(error) : null;
