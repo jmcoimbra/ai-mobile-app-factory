@@ -6,5 +6,5 @@ name: 'e2e: app launches and shows the home screen'
 # A release build's first cold start on a CI emulator can outlast the
 # default seven-second wait of assertVisible.
 - extendedWaitUntil:
-    visible: 'Factory Reference'
+    visible: 'Daily store checklist'
     timeout: 30000

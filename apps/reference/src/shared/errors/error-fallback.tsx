@@ -2,6 +2,9 @@ import { toAppError, userMessageFor } from '@maf/error-contract';
 
 import { AppText, Button, Screen } from '@/shared/ui';
 
+/** The label of every button that repeats a failed request. */
+export const RETRY_LABEL = 'Try again';
+
 interface ErrorFallbackProps {
   error: unknown;
   /** Called when the person asks to try again. Omitted when retrying cannot help. */
@@ -21,7 +24,7 @@ export function ErrorFallback({ error, onRetry }: ErrorFallbackProps) {
         {message.title}
       </AppText>
       <AppText tone="secondary">{message.body}</AppText>
-      {message.canRetry && onRetry ? <Button label="Try again" onPress={onRetry} /> : null}
+      {message.canRetry && onRetry ? <Button label={RETRY_LABEL} onPress={onRetry} /> : null}
     </Screen>
   );
 }
