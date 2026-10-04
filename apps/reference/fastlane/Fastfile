@@ -110,14 +110,17 @@ platform :android do
   private_lane :sign_bundle do |options|
     bundle = options.fetch(:bundle)
     keystore = "upload.keystore"
-    if ENV["ANDROID_UPLOAD_KEYSTORE_BASE64"].to_s.empty?
-      UI.user_error!("no upload keystore in the environment") unless dry_run?
+    # A dry run always signs with a throwaway key, even when the real one is
+    # in the environment: rehearsing never touches the production key.
+    if dry_run?
       UI.important("dry run: signing with a throwaway key")
       sh("keytool", "-genkeypair", "-keystore", keystore, "-storepass", "dry-run-only",
          "-alias", "upload", "-keyalg", "RSA", "-keysize", "2048", "-validity", "1",
          "-dname", "CN=dry run")
       password = "dry-run-only"
       alias_name = "upload"
+    elsif ENV["ANDROID_UPLOAD_KEYSTORE_BASE64"].to_s.empty?
+      UI.user_error!("no upload keystore in the environment")
     else
       File.binwrite(keystore, Base64.decode64(ENV.fetch("ANDROID_UPLOAD_KEYSTORE_BASE64")))
       password = ENV.fetch("ANDROID_UPLOAD_KEYSTORE_PASSWORD")
@@ -128,9 +131,13 @@ platform :android do
     FileUtils.cp(bundle, signed)
     sh("jarsigner", "-keystore", keystore, "-storepass", password,
        "-sigalg", "SHA256withRSA", "-digestalg", "SHA-256", signed, alias_name)
-    # No -strict: Android upload keys are self-signed, and -strict turns the
-    # self-signed warning into a failure.
-    sh("jarsigner", "-verify", signed)
+    # -strict would fail on every self-signed upload key, and without it
+    # jarsigner exits 0 even for an unsigned bundle. So the output decides:
+    # it must say the jar is verified, with no unsigned entry.
+    verification = sh("jarsigner", "-verify", signed, log: false)
+    unless verification.include?("jar verified.") && !verification.match?(/unsigned/i)
+      UI.user_error!("jarsigner did not verify #{signed}:\n#{verification}")
+    end
     UI.success("signed bundle at #{signed}, sha256 #{Digest::SHA256.file(signed).hexdigest}")
     signed
   end

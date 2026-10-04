@@ -57,6 +57,9 @@ jobs:
           APP_ID: com.example.factory
           STORE_SUBMISSION_APPROVED: 'true'
           DRY_RUN: 'true'
+          # Not a keystore. If a dry run ever signed with the key in the
+          # environment instead of a throwaway one, signing would fail here.
+          ANDROID_UPLOAD_KEYSTORE_BASE64: bm90LWEta2V5c3RvcmU=
         # A bundle is a zip; any zip exercises keytool and jarsigner the
         # same way the release workflow does, with a throwaway key.
         run: |
