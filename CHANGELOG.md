@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/jmcoimbra/ai-mobile-app-factory/compare/v0.1.0...v0.1.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* let the android upload lane sign a bundle ([#13](https://github.com/jmcoimbra/ai-mobile-app-factory/issues/13)) ([6ab2248](https://github.com/jmcoimbra/ai-mobile-app-factory/commit/6ab2248b9fcc052dfef4a18ee0d08beaf52dddf7))
+
 ## 0.1.0 (2026-10-03)
 
 
