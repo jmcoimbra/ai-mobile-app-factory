@@ -206,7 +206,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        attempt: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'control']
+        attempt: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -234,17 +234,26 @@ jobs:
           # The XCTest driver takes longer than Maestro's default to come up
           # on a hosted runner; measured 2026-10-02 at over two minutes.
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'
-        # On a failure, keep what the screen showed, the accessibility tree
-        # Maestro reads, what the simulator logged and Maestro's own test
-        # folder, so a red run can be diagnosed from its artifact.
+        # Maestro writes its own test folder (maestro.log, commands and the
+        # failed step's screenshot and hierarchy) into maestro-debug. Without
+        # --flatten-debug-output it nests it under .maestro/tests/<timestamp>,
+        # a hidden path upload-artifact skips. On a failure, also keep what the
+        # screen showed, the accessibility tree and what the simulator logged,
+        # so a red run can be diagnosed from its artifact.
         run: |
           mkdir -p maestro-debug
-          maestro --device "$SIMULATOR_UDID" test apps/reference/e2e -e APP_ID=${{ matrix.attempt == 'control' && 'com.example.absent' || env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug || {
+          # TEMPORARY: record the screen while reproducing the flake.
+          xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec h264 maestro-debug/run.mp4 &
+          video=$!
+          status=0
+          maestro --device "$SIMULATOR_UDID" test apps/reference/e2e -e APP_ID=${{ matrix.attempt == 'control' && 'com.example.absent' || env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug --flatten-debug-output || status=$?
+          kill -INT "$video"
+          wait "$video" || true
+          [ "$status" -eq 0 ] || {
             # Collect whatever can be collected; the job fails either way.
             set +e
             xcrun simctl io "$SIMULATOR_UDID" screenshot maestro-debug/failure.png
             xcrun simctl spawn "$SIMULATOR_UDID" log show --start "$SIMULATOR_LOG_START" --style compact > maestro-debug/simulator.log
-            cp -R ~/.maestro/tests maestro-debug/maestro-tests 2>/dev/null
             # Last, since it starts the XCTest driver again.
             maestro --device "$SIMULATOR_UDID" hierarchy > maestro-debug/hierarchy.json 2> maestro-debug/hierarchy.err
             exit 1
