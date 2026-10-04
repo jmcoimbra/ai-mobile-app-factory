@@ -199,7 +199,7 @@ jobs:
   e2e-ios:
     needs: preview-ios
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 60
     # Reports without blocking until the iOS run proves stable (ADR 0003).
     continue-on-error: true
     # TEMPORARY: reproduce the intermittent failure. Removed before review.
@@ -246,7 +246,7 @@ jobs:
           xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec h264 maestro-debug/run.mp4 &
           video=$!
           status=0
-          maestro --device "$SIMULATOR_UDID" test apps/reference/e2e -e APP_ID=${{ matrix.attempt == 'control' && 'com.example.absent' || env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug --flatten-debug-output || status=$?
+          maestro --device "$SIMULATOR_UDID" test .github/repro/checklist-repeat.yaml -e APP_ID=${{ matrix.attempt == 'control' && 'com.example.absent' || env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug --flatten-debug-output || status=$?
           kill -INT "$video"
           wait "$video" || true
           [ "$status" -eq 0 ] || {
