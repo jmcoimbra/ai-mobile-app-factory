@@ -47,6 +47,11 @@ clear the merge box on their own: the pull request stayed blocked until the
 held `pull_request` runs were approved and passed. Approve the held runs
 even when a dispatched run is already green.
 
+Do not start CI on the release branch by hand. Every CI run dispatched on one branch
+shares a concurrency group, so a run dispatched by hand cancels the one the
+workflow already started, and cancelling the extra run then leaves none. That
+happened on the 0.1.0 release and cost a full CI round.
+
 Approving runs CI on code release-please wrote: the version bump and the
 changelog. It changes nothing in the app.
 
