@@ -9,6 +9,7 @@
 # Every lane reads APP_VARIANT (public or corporate) and APP_ID. The
 # native projects are generated beforehand with `npx expo prebuild`.
 
+fastlane_require "base64"
 fastlane_require "digest"
 
 APPROVAL_FLAG = "STORE_SUBMISSION_APPROVED".freeze
@@ -59,7 +60,8 @@ platform :android do
     require_approval!
     bundle = options.fetch(:bundle)
     track = options.fetch(:track, "internal")
-    signed = sign_bundle(bundle)
+    # Lanes only take named parameters, so the bundle goes in a hash.
+    signed = sign_bundle(bundle: bundle)
 
     if dry_run?
       UI.important("dry run: the bundle is signed and verified, nothing is uploaded")
@@ -105,7 +107,8 @@ platform :android do
 
   # Signs an unsigned bundle with the upload keystore from the environment.
   # In a dry run with no keystore, a throwaway key proves the path.
-  private_lane :sign_bundle do |bundle|
+  private_lane :sign_bundle do |options|
+    bundle = options.fetch(:bundle)
     keystore = "upload.keystore"
     if ENV["ANDROID_UPLOAD_KEYSTORE_BASE64"].to_s.empty?
       UI.user_error!("no upload keystore in the environment") unless dry_run?
@@ -125,7 +128,9 @@ platform :android do
     FileUtils.cp(bundle, signed)
     sh("jarsigner", "-keystore", keystore, "-storepass", password,
        "-sigalg", "SHA256withRSA", "-digestalg", "SHA-256", signed, alias_name)
-    sh("jarsigner", "-verify", "-strict", signed)
+    # No -strict: Android upload keys are self-signed, and -strict turns the
+    # self-signed warning into a failure.
+    sh("jarsigner", "-verify", signed)
     UI.success("signed bundle at #{signed}, sha256 #{Digest::SHA256.file(signed).hexdigest}")
     signed
   end
