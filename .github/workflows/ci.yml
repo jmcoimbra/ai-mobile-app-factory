@@ -47,6 +47,28 @@ jobs:
             exit 1
           fi
           grep -q "STORE_SUBMISSION_APPROVED is not 'true'" "$RUNNER_TEMP/upload.log"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: The android upload lane signs a bundle in a dry run
+        working-directory: apps/reference
+        env:
+          APP_ID: com.example.factory
+          STORE_SUBMISSION_APPROVED: 'true'
+          DRY_RUN: 'true'
+          # Not a keystore. If a dry run ever signed with the key in the
+          # environment instead of a throwaway one, signing would fail here.
+          ANDROID_UPLOAD_KEYSTORE_BASE64: bm90LWEta2V5c3RvcmU=
+        # A bundle is a zip; any zip exercises keytool and jarsigner the
+        # same way the release workflow does, with a throwaway key.
+        run: |
+          set -euo pipefail
+          printf 'placeholder\n' > "$RUNNER_TEMP/placeholder.txt"
+          (cd "$RUNNER_TEMP" && zip -q fake.aab placeholder.txt)
+          bundle exec fastlane android upload bundle:"$RUNNER_TEMP/fake.aab" > "$RUNNER_TEMP/dry-run.log" 2>&1 || { cat "$RUNNER_TEMP/dry-run.log"; exit 1; }
+          grep -q "dry run: the bundle is signed and verified, nothing is uploaded" "$RUNNER_TEMP/dry-run.log"
+          test -f "$RUNNER_TEMP/fake-signed.aab"
 
   typecheck:
     runs-on: ubuntu-latest
