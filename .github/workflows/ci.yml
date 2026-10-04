@@ -258,6 +258,19 @@ jobs:
             maestro --device "$SIMULATOR_UDID" hierarchy > maestro-debug/hierarchy.json 2> maestro-debug/hierarchy.err
             exit 1
           }
+      # Maestro names a flow's folder after the flow, and "e2e: ..." carries a
+      # colon, which upload-artifact refuses, failing the whole upload.
+      - name: Make the debug paths uploadable
+        if: always()
+        shell: python3 {0}
+        run: |
+          import os
+          bad = str.maketrans({c: '-' for c in '":<>|*?\r\n'})
+          for root, dirs, files in os.walk('maestro-debug', topdown=False):
+              for name in dirs + files:
+                  safe = name.translate(bad)
+                  if safe != name:
+                      os.rename(os.path.join(root, name), os.path.join(root, safe))
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
