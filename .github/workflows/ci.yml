@@ -156,7 +156,7 @@ jobs:
             adb shell settings put global hide_error_dialogs 1
             adb install -r preview/app-release.apk
             mkdir -p maestro-debug
-            maestro test apps/reference/e2e -e APP_ID=com.example.absent --format junit --output maestro-report.xml --debug-output maestro-debug --flatten-debug-output || { adb exec-out screencap -p > maestro-debug/failure.png; adb logcat -d > maestro-debug/logcat.txt; exit 1; }
+            maestro test apps/reference/e2e -e APP_ID=${{ env.APP_ID }} --format junit --output maestro-report.xml --debug-output maestro-debug --flatten-debug-output || { adb exec-out screencap -p > maestro-debug/failure.png; adb logcat -d > maestro-debug/logcat.txt; exit 1; }
       - name: Make the debug paths uploadable
         if: always()
         run: python3 tooling/uploadable-paths.py maestro-debug
