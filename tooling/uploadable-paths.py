@@ -11,6 +11,16 @@ import sys
 REFUSED = str.maketrans({c: "-" for c in '":<>|*?\r\n'})
 
 
+def free_name(root: str, name: str) -> str:
+    """`name`, or `name-2`, `name-3`... when two names map to the same one."""
+    stem, ext = os.path.splitext(name)
+    candidate, n = name, 1
+    while os.path.lexists(os.path.join(root, candidate)):
+        n += 1
+        candidate = f"{stem}-{n}{ext}"
+    return candidate
+
+
 def main() -> None:
     root_dir = sys.argv[1]
     # Bottom up, so a folder is renamed after everything inside it.
@@ -18,7 +28,8 @@ def main() -> None:
         for name in dirs + files:
             safe = name.translate(REFUSED)
             if safe != name:
-                os.rename(os.path.join(root, name), os.path.join(root, safe))
+                target = free_name(root, safe)
+                os.rename(os.path.join(root, name), os.path.join(root, target))
 
 
 if __name__ == "__main__":
