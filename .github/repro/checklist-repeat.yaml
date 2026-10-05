@@ -1,8 +1,0 @@
-# TEMPORARY: repeats the checklist flow to reproduce an intermittent failure.
-appId: ${APP_ID}
-name: 'repro: checklist ten times'
----
-- repeat:
-    times: 10
-    commands:
-      - runFlow: ../../apps/reference/e2e/daily-checklist.yaml
