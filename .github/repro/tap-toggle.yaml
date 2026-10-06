@@ -1,0 +1,52 @@
+# EXPERIMENT: hunts the iOS tap that changes nothing. Never merged.
+appId: ${APP_ID}
+name: 'experiment: toggle every task'
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: '0 of 5 done'
+    timeout: 120000
+- repeat:
+    times: 20
+    commands:
+      - tapOn: 'Open the safe'
+      - extendedWaitUntil:
+          visible: '1 of 5 done'
+          timeout: 120000
+      - tapOn: 'Check the fridge temperatures'
+      - extendedWaitUntil:
+          visible: '2 of 5 done'
+          timeout: 120000
+      - tapOn: 'Count the float'
+      - extendedWaitUntil:
+          visible: '3 of 5 done'
+          timeout: 120000
+      - tapOn: 'Review the roster'
+      - extendedWaitUntil:
+          visible: '4 of 5 done'
+          timeout: 120000
+      - tapOn: 'Check the fire exits'
+      - extendedWaitUntil:
+          visible: '5 of 5 done'
+          timeout: 120000
+      - tapOn: 'Open the safe'
+      - extendedWaitUntil:
+          visible: '4 of 5 done'
+          timeout: 120000
+      - tapOn: 'Check the fridge temperatures'
+      - extendedWaitUntil:
+          visible: '3 of 5 done'
+          timeout: 120000
+      - tapOn: 'Count the float'
+      - extendedWaitUntil:
+          visible: '2 of 5 done'
+          timeout: 120000
+      - tapOn: 'Review the roster'
+      - extendedWaitUntil:
+          visible: '1 of 5 done'
+          timeout: 120000
+      - tapOn: 'Check the fire exits'
+      - extendedWaitUntil:
+          visible: '0 of 5 done'
+          timeout: 120000
