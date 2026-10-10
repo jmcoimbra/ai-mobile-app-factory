@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/jmcoimbra/ai-mobile-app-factory/compare/v0.1.1...v0.1.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* keep ios e2e evidence and wait out a slow simulator ([#17](https://github.com/jmcoimbra/ai-mobile-app-factory/issues/17)) ([8e66a64](https://github.com/jmcoimbra/ai-mobile-app-factory/commit/8e66a647f0f3937d6e2e6b77c7a29380b798cc35))
+
 ## [0.1.1](https://github.com/jmcoimbra/ai-mobile-app-factory/compare/v0.1.0...v0.1.1) (2026-10-04)
 
 
